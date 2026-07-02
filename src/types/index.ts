@@ -14,6 +14,7 @@ export interface ProjectInfo {
   managementRate: number;
   salesRate: number;
   deliveryMonth: number;
+  trialOperationMonths: number;
   hotelAverageDailyRate: number;
   commercialMonthlyRent: number;
   hotelOccupancyRate: number;
@@ -89,6 +90,7 @@ export interface CalculatedRow extends AssetRow {
   netProfit: number;
   fullUnitCost: number;
   annualNetCashFlow: number;
+  paybackPeriod: number | null;
   cumulativeReturn: number;
   npv: number;
   irr: number | null;
@@ -97,6 +99,8 @@ export interface CalculatedRow extends AssetRow {
 export interface ProjectSummary {
   revenue: number;
   holdingReturns: number;
+  holdingAnnualNetCashFlow: number;
+  includeHoldingReturns: boolean;
   totalIncome: number;
   totalConstructionCost: number;
   managementFeeBase: number;

@@ -55,7 +55,7 @@ export function calculateRows(rows: AssetRow[], project: ProjectInfo, _allocatio
     const managementFee = round(row.manualManagementFee ?? managementBase * project.managementRate);
     const salesFee = isSaleable ? round(row.manualSalesFee ?? revenue * project.salesRate) : 0;
     const vat = round(revenue * project.vatRate);
-    const netProfit = round(revenue - totalConstructionCost - managementFee - salesFee - vat);
+    const netProfit = isSaleable ? round(revenue - totalConstructionCost - managementFee - salesFee - vat) : 0;
     const fullUnitCost = row.buildingArea ? round((totalConstructionCost + managementFee + salesFee) * 10000 / row.buildingArea) : 0;
     const isHotel = row.kind === "自持酒店";
     const isCommercial = row.kind === "自持商业";
@@ -69,10 +69,11 @@ export function calculateRows(rows: AssetRow[], project: ProjectInfo, _allocatio
     } : undefined;
     const holding = holdingIncome ? { ...holdingIncome, annualOperatingCost: round((holdingIncome.annualRent + holdingIncome.annualOperatingIncome) * (project.annualOperatingCostRate ?? .35)) } : undefined;
     const annualNetCashFlow = holding ? round(holding.annualRent + holding.annualOperatingIncome - holding.annualOperatingCost) : 0;
+    const paybackPeriod = holding && annualNetCashFlow > 0 ? round(totalConstructionCost / annualNetCashFlow) : null;
     const cumulativeReturn = holding ? round(annualNetCashFlow * holding.holdingYears) : 0;
     const cashflows = holding ? [-totalConstructionCost, ...Array(holding.holdingYears).fill(annualNetCashFlow)] : [];
     return { ...row, holding, revenue, baseConstructionCost, governmentConstructionCost, secondaryAllocation,
-      totalConstructionCost, managementFee, salesFee, vat, netProfit, fullUnitCost, annualNetCashFlow,
+      totalConstructionCost, managementFee, salesFee, vat, netProfit, fullUnitCost, annualNetCashFlow, paybackPeriod,
       cumulativeReturn, npv: holding ? round(npv(holding.discountRate, cashflows)) : 0,
       irr: holding ? irr(cashflows) : null };
   });
@@ -80,8 +81,10 @@ export function calculateRows(rows: AssetRow[], project: ProjectInfo, _allocatio
 
 export function calculateSummary(rows: CalculatedRow[], project: ProjectInfo): ProjectSummary {
   const sum = (key: keyof CalculatedRow) => rows.reduce((total, row) => total + (typeof row[key] === "number" ? row[key] as number : 0), 0);
+  const holdingRows = rows.filter(row => row.kind === "自持酒店" || row.kind === "自持商业" || row.kind === "其他自持");
   const revenue = round(sum("revenue"));
   const holdingReturns = round(sum("cumulativeReturn"));
+  const holdingAnnualNetCashFlow = round(holdingRows.reduce((total, row) => total + row.annualNetCashFlow, 0));
   const totalConstructionCost = round(sum("totalConstructionCost"));
   const managementFeeBase = round(rows.reduce((total, row) => total + (row.saleArea > 0 ? row.revenue : row.totalConstructionCost), 0));
   const managementFee = round(sum("managementFee"));
@@ -91,7 +94,8 @@ export function calculateSummary(rows: CalculatedRow[], project: ProjectInfo): P
   const totalIncome = round(revenue + (project.includeHoldingReturns ? holdingReturns : 0));
   const netProfit = round(totalIncome - totalCost);
   const governmentArea = round(sum("governmentArea"));
-  return { revenue, holdingReturns, totalIncome, totalConstructionCost, managementFeeBase, managementFee, salesFee, vat,
+  return { revenue, holdingReturns, holdingAnnualNetCashFlow, includeHoldingReturns: project.includeHoldingReturns,
+    totalIncome, totalConstructionCost, managementFeeBase, managementFee, salesFee, vat,
     totalCost, netProfit, roi: totalCost ? netProfit / totalCost : 0, governmentArea,
     governmentRatio: project.totalBuildingArea ? governmentArea / project.totalBuildingArea : 0,
     governmentCost: round(sum("governmentConstructionCost")) };
@@ -106,6 +110,7 @@ export interface CashFlowPoint {
   month: number;
   monthlySales: number;
   monthlyCollection: number;
+  monthlyOperatingCashFlow: number;
   monthlyOutflow: number;
   cumulativeSales: number;
   cumulativeCollection: number;
@@ -205,10 +210,10 @@ export function calculateSimulationSummary(base: ProjectSummary, rates: Simulati
 }
 
 /**
- * MVP 月度推演模型：销售集中于第 4–24 月，回款平均滞后 2 个月，
- * 项目支出集中于第 1–26 月。各月权重归一化，确保累计值与项目汇总完全一致。
+ * 月度推演模型：销售与回款采用业态配置；建安支出按建设期分布。
+ * 自持经营净现金流从交付并完成试营业后的下一个月开始进入项目现金流。
  */
-export function calculateCashFlowProjection(summary: ProjectSummary, months = 36, collectionSchedule?: CollectionSchedule, managementAllocationMonths = months): CashFlowPoint[] {
+export function calculateCashFlowProjection(summary: ProjectSummary, months = 36, collectionSchedule?: CollectionSchedule, deliveryMonth = months, trialOperationMonths = 0): CashFlowPoint[] {
   const bell = (month: number, start: number, end: number, center: number, spread: number) =>
     month < start || month > end ? 0 : Math.exp(-Math.pow(month - center, 2) / (2 * spread * spread));
   const normalize = (weights: number[]) => {
@@ -222,15 +227,19 @@ export function calculateCashFlowProjection(summary: ProjectSummary, months = 36
     const lagged = month > 2 ? salesWeights[i - 2] * 0.8 : 0;
     return current + lagged;
   }));
-  const outflowWeights = normalize(Array.from({ length: months }, (_, i) => bell(i + 1, 1, 26, 11, 7)));
+  const constructionEndMonth = Math.max(1, Math.min(months, Math.round(deliveryMonth)));
+  const outflowWeights = normalize(Array.from({ length: months }, (_, i) => bell(i + 1, 1, constructionEndMonth, constructionEndMonth * .45, Math.max(1, constructionEndMonth / 3.5))));
   const effectiveSalesFeeRate = summary.revenue ? summary.salesFee / summary.revenue : 0;
   const effectiveVatRate = summary.revenue ? summary.vat / summary.revenue : 0;
   const residualCost = Math.max(0, summary.totalCost - summary.totalConstructionCost - summary.managementFee - summary.salesFee - summary.vat);
-  const managementMonths = Math.max(1, Math.min(months, Math.round(managementAllocationMonths)));
+  const managementMonths = constructionEndMonth;
+  const operationStartMonth = Math.max(1, Math.round(deliveryMonth) + Math.max(0, Math.round(trialOperationMonths)) + 1);
+  const monthlyHoldingCashFlow = summary.includeHoldingReturns ? summary.holdingAnnualNetCashFlow / 12 : 0;
   let cumulativeSales = 0, cumulativeCollection = 0, cumulativeOutflow = 0;
   return Array.from({ length: months }, (_, i) => {
-    const monthlySales = round(collectionSchedule?.monthlySales[i] ?? summary.totalIncome * salesWeights[i]);
-    const monthlyCollection = round(collectionSchedule?.monthlyCollection[i] ?? summary.totalIncome * collectionWeights[i]);
+    const monthlySales = round(collectionSchedule?.monthlySales[i] ?? summary.revenue * salesWeights[i]);
+    const monthlyOperatingCashFlow = i + 1 >= operationStartMonth ? round(monthlyHoldingCashFlow) : 0;
+    const monthlyCollection = round((collectionSchedule?.monthlyCollection[i] ?? summary.revenue * collectionWeights[i]) + monthlyOperatingCashFlow);
     const constructionOutflow = summary.totalConstructionCost * outflowWeights[i];
     const managementOutflow = i < managementMonths ? summary.managementFee / managementMonths : 0;
     const salesOutflow = monthlySales * effectiveSalesFeeRate;
@@ -240,7 +249,7 @@ export function calculateCashFlowProjection(summary: ProjectSummary, months = 36
     cumulativeCollection += monthlyCollection;
     cumulativeOutflow += monthlyOutflow;
     return {
-      month: i + 1, monthlySales, monthlyCollection, monthlyOutflow,
+      month: i + 1, monthlySales, monthlyCollection, monthlyOperatingCashFlow, monthlyOutflow,
       cumulativeSales: round(cumulativeSales), cumulativeCollection: round(cumulativeCollection),
       cumulativeOutflow: round(cumulativeOutflow), cumulativeNetCashFlow: round(cumulativeCollection - cumulativeOutflow)
     };
