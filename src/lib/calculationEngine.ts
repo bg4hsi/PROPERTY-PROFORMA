@@ -54,7 +54,7 @@ export function calculateRows(rows: AssetRow[], project: ProjectInfo, _allocatio
     const totalConstructionCost = round(saleAndHoldCost + governmentConstructionCost + secondaryAllocation);
     const isSaleable = row.saleArea > 0;
     const allocatedLandCost = row.kind === "销售" && saleableBuildingArea > 0 ? round(governmentCostPool * row.buildingArea / saleableBuildingArea) : 0;
-    const allocatedLandUnitCost = row.buildingArea > 0 ? round(allocatedLandCost * 10000 / row.buildingArea) : 0;
+    const allocatedLandUnitCost = row.saleArea > 0 ? round(allocatedLandCost * 10000 / row.saleArea) : 0;
     const managementBase = isSaleable ? revenue : totalConstructionCost;
     const managementFee = round(row.manualManagementFee ?? managementBase * project.managementRate);
     const salesFee = isSaleable ? round(row.manualSalesFee ?? revenue * project.salesRate) : 0;
