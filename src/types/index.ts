@@ -16,7 +16,10 @@ export interface ProjectInfo {
   shareholderInterestRate: number;
   deliveryMonth: number;
   trialOperationMonths: number;
-  hotelAverageDailyRate: number;
+  /** 旧方案兼容字段，新方案使用四星/五星价格。 */
+  hotelAverageDailyRate?: number;
+  fourStarHotelAverageDailyRate: number;
+  fiveStarHotelAverageDailyRate: number;
   commercialMonthlyRent: number;
   hotelOccupancyRate: number;
   commercialOccupancyRate: number;

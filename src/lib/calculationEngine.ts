@@ -68,9 +68,14 @@ export function calculateRows(rows: AssetRow[], project: ProjectInfo, _allocatio
     const isOtherHolding = row.kind === "其他自持";
     const holdingBase = (isHotel || isCommercial || isOtherHolding) ? (row.holding || { annualRent: 0, annualOperatingIncome: 0, annualOperatingCost: 0, holdingYears: 10, discountRate: .08 }) : undefined;
     const roomCount = holdingBase?.roomCount || Math.max(1, Math.round(row.buildingArea / 50));
+    const isFiveStarHotel = /五星|5\s*星/i.test(row.name);
+    const legacyHotelRate = project.hotelAverageDailyRate ?? 800;
+    const fourStarHotelRate = project.fourStarHotelAverageDailyRate ?? legacyHotelRate;
+    const fiveStarHotelRate = project.fiveStarHotelAverageDailyRate ?? legacyHotelRate;
+    const hotelAverageDailyRate = isFiveStarHotel ? fiveStarHotelRate : fourStarHotelRate;
     const holdingIncome = holdingBase ? {
       ...holdingBase,
-      ...(isHotel ? { roomCount, annualRent: 0, annualOperatingIncome: round(roomCount * (project.hotelAverageDailyRate ?? 800) * (project.hotelOccupancyRate ?? .7) * 365 / 10000) } : {}),
+      ...(isHotel ? { roomCount, annualRent: 0, annualOperatingIncome: round(roomCount * hotelAverageDailyRate * (project.hotelOccupancyRate ?? .7) * 365 / 10000) } : {}),
       ...(isCommercial ? { annualRent: round(row.buildingArea * (project.commercialMonthlyRent ?? 150) * (project.commercialOccupancyRate ?? .85) * 12 / 10000), annualOperatingIncome: 0 } : {})
     } : undefined;
     const holding = holdingIncome ? { ...holdingIncome, annualOperatingCost: round((holdingIncome.annualRent + holdingIncome.annualOperatingIncome) * (project.annualOperatingCostRate ?? .35)) } : undefined;
