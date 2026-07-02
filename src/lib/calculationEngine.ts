@@ -228,7 +228,6 @@ export function calculateCashFlowProjection(summary: ProjectSummary, months = 36
     return current + lagged;
   }));
   const constructionEndMonth = Math.max(1, Math.min(months, Math.round(deliveryMonth)));
-  const outflowWeights = normalize(Array.from({ length: months }, (_, i) => bell(i + 1, 1, constructionEndMonth, constructionEndMonth * .45, Math.max(1, constructionEndMonth / 3.5))));
   const effectiveSalesFeeRate = summary.revenue ? summary.salesFee / summary.revenue : 0;
   const effectiveVatRate = summary.revenue ? summary.vat / summary.revenue : 0;
   const residualCost = Math.max(0, summary.totalCost - summary.totalConstructionCost - summary.managementFee - summary.salesFee - summary.vat);
@@ -240,7 +239,12 @@ export function calculateCashFlowProjection(summary: ProjectSummary, months = 36
     const monthlySales = round(collectionSchedule?.monthlySales[i] ?? summary.revenue * salesWeights[i]);
     const monthlyOperatingCashFlow = i + 1 >= operationStartMonth ? round(monthlyHoldingCashFlow) : 0;
     const monthlyCollection = round((collectionSchedule?.monthlyCollection[i] ?? summary.revenue * collectionWeights[i]) + monthlyOperatingCashFlow);
-    const constructionOutflow = summary.totalConstructionCost * outflowWeights[i];
+    const month = i + 1;
+    const constructionOutflow = month <= constructionEndMonth
+      ? summary.totalConstructionCost * .75 / constructionEndMonth
+      : month <= constructionEndMonth + 6
+        ? summary.totalConstructionCost * .25 / 6
+        : 0;
     const managementOutflow = i < managementMonths ? summary.managementFee / managementMonths : 0;
     const salesOutflow = monthlySales * effectiveSalesFeeRate;
     const vatOutflow = monthlySales * effectiveVatRate;
