@@ -63,6 +63,7 @@ export function calculateRows(rows: AssetRow[], project: ProjectInfo, _allocatio
     const shareholderInterest = 0;
     const netProfit = isSaleable ? round(revenue - totalConstructionCost - allocatedLandCost - managementFee - salesFee - vat) : 0;
     const fullUnitCost = row.buildingArea ? round((totalConstructionCost + allocatedLandCost + managementFee + salesFee) * 10000 / row.buildingArea) : 0;
+    const unitProfit = isSaleable && row.saleArea > 0 ? round(netProfit * 10000 / row.saleArea) : 0;
     const isHotel = row.kind === "自持酒店";
     const isCommercial = row.kind === "自持商业";
     const isOtherHolding = row.kind === "其他自持";
@@ -84,7 +85,7 @@ export function calculateRows(rows: AssetRow[], project: ProjectInfo, _allocatio
     const cumulativeReturn = holding ? round(annualNetCashFlow * holding.holdingYears) : 0;
     const cashflows = holding ? [-totalConstructionCost, ...Array(holding.holdingYears).fill(annualNetCashFlow)] : [];
     return { ...row, holding, revenue, baseConstructionCost, governmentConstructionCost, secondaryAllocation,
-      totalConstructionCost, allocatedLandCost, allocatedLandUnitCost, managementFee, salesFee, vat, shareholderInterest, netProfit, fullUnitCost, annualNetCashFlow, paybackPeriod,
+      totalConstructionCost, allocatedLandCost, allocatedLandUnitCost, managementFee, salesFee, vat, shareholderInterest, netProfit, fullUnitCost, unitProfit, annualNetCashFlow, paybackPeriod,
       cumulativeReturn, npv: holding ? round(npv(holding.discountRate, cashflows)) : 0,
       irr: holding ? irr(cashflows) : null };
   });
@@ -137,7 +138,8 @@ export function calculateProject(rows: AssetRow[], project: ProjectInfo, allocat
       remainingInterest = round(remainingInterest - shareholderInterest);
     }
     const netProfit = row.kind === "销售" ? round(row.netProfit - shareholderInterest) : 0;
-    return { ...row, shareholderInterest, netProfit };
+    const unitProfit = row.kind === "销售" && row.saleArea > 0 ? round(netProfit * 10000 / row.saleArea) : 0;
+    return { ...row, shareholderInterest, netProfit, unitProfit };
   });
   return { rows: calculatedRows, summary: calculateSummary(calculatedRows, project) };
 }

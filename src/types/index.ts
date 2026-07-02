@@ -96,6 +96,7 @@ export interface CalculatedRow extends AssetRow {
   shareholderInterest: number;
   netProfit: number;
   fullUnitCost: number;
+  unitProfit: number;
   annualNetCashFlow: number;
   paybackPeriod: number | null;
   cumulativeReturn: number;
