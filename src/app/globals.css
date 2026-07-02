@@ -1,0 +1,23 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root { color-scheme: light; }
+* { box-sizing: border-box; }
+body { margin: 0; background: #f4f7f9; color: #102a43; font-family: Inter, "PingFang SC", "Microsoft YaHei", sans-serif; }
+button, input, select { font: inherit; }
+.card { @apply rounded-2xl border border-slate-200 bg-white shadow-sm; }
+.btn { @apply inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-teal-300 hover:text-teal-700 disabled:cursor-not-allowed disabled:opacity-40; }
+.btn-primary { @apply border-teal-700 bg-teal-700 text-white hover:bg-teal-800 hover:text-white; }
+.field { @apply w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-100; }
+.label { @apply mb-1 block text-xs font-medium text-slate-500; }
+.table-input { @apply h-9 w-full min-w-[70px] border-0 bg-transparent px-2 text-right text-sm tabular-nums outline-none focus:bg-teal-50 focus:ring-2 focus:ring-inset focus:ring-teal-400; }
+.table-text { @apply h-9 min-w-[140px] w-full border-0 bg-transparent px-2 text-left text-sm outline-none focus:bg-teal-50 focus:ring-2 focus:ring-inset focus:ring-teal-400; }
+@media print {
+  body { background: white; }
+  .no-print, aside, header .actions { display: none !important; }
+  main { padding: 0 !important; }
+  .card { box-shadow: none; break-inside: avoid; }
+  .print-wide { overflow: visible !important; }
+  table { font-size: 8px !important; }
+}

@@ -1,0 +1,245 @@
+import { AllocationRule, AssetKind, AssetRow, CalculatedRow, ProjectInfo, ProjectSummary } from "@/types";
+
+const safe = (n: number) => (Number.isFinite(n) ? n : 0);
+const round = (n: number) => Math.round((safe(n) + Number.EPSILON) * 10000) / 10000;
+
+export function normalizeAssetKind(row: Pick<AssetRow, "kind"|"name">): AssetKind {
+  const kind = String(row.kind);
+  if (["销售","给政府","自持酒店","自持商业","其他自持","车位"].includes(kind)) return kind as AssetKind;
+  if (kind === "政府") return "给政府";
+  if (kind === "自持") {
+    if (row.name.includes("酒店")) return "自持酒店";
+    if (row.name.includes("MALL") || row.name.includes("商业") || row.name.includes("商场")) return "自持商业";
+    return "其他自持";
+  }
+  return "其他自持";
+}
+
+export function npv(rate: number, cashflows: number[]): number {
+  return cashflows.reduce((sum, cashflow, year) => sum + cashflow / Math.pow(1 + rate, year), 0);
+}
+
+export function irr(cashflows: number[]): number | null {
+  if (!cashflows.some(v => v < 0) || !cashflows.some(v => v > 0)) return null;
+  let low = -0.9999, high = 10;
+  for (let i = 0; i < 160; i++) {
+    const mid = (low + high) / 2;
+    if (npv(mid, cashflows) > 0) low = mid; else high = mid;
+  }
+  return (low + high) / 2;
+}
+
+export function calculateRows(rows: AssetRow[], project: ProjectInfo, _allocations: AllocationRule[]): CalculatedRow[] {
+  // 兼容旧方案：首次计算时用历史销售面积反推得房率；此后销售面积始终由公式生成。
+  const normalizedRows = rows.map(row => {
+    const kind = normalizeAssetKind(row);
+    const efficiencyRate = row.efficiencyRate ?? (row.buildingArea ? row.saleArea / row.buildingArea : 0);
+    const saleArea = kind === "销售" || kind === "车位" ? round(row.buildingArea * efficiencyRate) : 0;
+    return { ...row, kind, efficiencyRate, saleArea };
+  });
+  const revenues = new Map(normalizedRows.map(row => [row.id, round(row.saleArea * row.salePrice / 10000)]));
+
+  return normalizedRows.map(row => {
+    const revenue = revenues.get(row.id) || 0;
+    const baseConstructionCost = round(row.buildingArea * row.unitCost / 10000);
+    const governmentConstructionCost = round(row.governmentArea * row.unitCost / 10000);
+    const secondaryAllocation = 0;
+    // 建筑面积已包含政府面积时，基础成本中扣除政府面积，避免重复计算。
+    const saleAndHoldCost = round(Math.max(0, row.buildingArea - row.governmentArea) * row.unitCost / 10000);
+    const totalConstructionCost = round(saleAndHoldCost + governmentConstructionCost + secondaryAllocation);
+    const isSaleable = row.saleArea > 0;
+    const managementBase = isSaleable ? revenue : totalConstructionCost;
+    const managementFee = round(row.manualManagementFee ?? managementBase * project.managementRate);
+    const salesFee = isSaleable ? round(row.manualSalesFee ?? revenue * project.salesRate) : 0;
+    const vat = round(revenue * project.vatRate);
+    const netProfit = round(revenue - totalConstructionCost - managementFee - salesFee - vat);
+    const fullUnitCost = row.buildingArea ? round((totalConstructionCost + managementFee + salesFee) * 10000 / row.buildingArea) : 0;
+    const isHotel = row.kind === "自持酒店";
+    const isCommercial = row.kind === "自持商业";
+    const isOtherHolding = row.kind === "其他自持";
+    const holdingBase = (isHotel || isCommercial || isOtherHolding) ? (row.holding || { annualRent: 0, annualOperatingIncome: 0, annualOperatingCost: 0, holdingYears: 10, discountRate: .08 }) : undefined;
+    const roomCount = holdingBase?.roomCount || Math.max(1, Math.round(row.buildingArea / 50));
+    const holdingIncome = holdingBase ? {
+      ...holdingBase,
+      ...(isHotel ? { roomCount, annualRent: 0, annualOperatingIncome: round(roomCount * (project.hotelAverageDailyRate ?? 800) * (project.hotelOccupancyRate ?? .7) * 365 / 10000) } : {}),
+      ...(isCommercial ? { annualRent: round(row.buildingArea * (project.commercialMonthlyRent ?? 150) * (project.commercialOccupancyRate ?? .85) * 12 / 10000), annualOperatingIncome: 0 } : {})
+    } : undefined;
+    const holding = holdingIncome ? { ...holdingIncome, annualOperatingCost: round((holdingIncome.annualRent + holdingIncome.annualOperatingIncome) * (project.annualOperatingCostRate ?? .35)) } : undefined;
+    const annualNetCashFlow = holding ? round(holding.annualRent + holding.annualOperatingIncome - holding.annualOperatingCost) : 0;
+    const cumulativeReturn = holding ? round(annualNetCashFlow * holding.holdingYears) : 0;
+    const cashflows = holding ? [-totalConstructionCost, ...Array(holding.holdingYears).fill(annualNetCashFlow)] : [];
+    return { ...row, holding, revenue, baseConstructionCost, governmentConstructionCost, secondaryAllocation,
+      totalConstructionCost, managementFee, salesFee, vat, netProfit, fullUnitCost, annualNetCashFlow,
+      cumulativeReturn, npv: holding ? round(npv(holding.discountRate, cashflows)) : 0,
+      irr: holding ? irr(cashflows) : null };
+  });
+}
+
+export function calculateSummary(rows: CalculatedRow[], project: ProjectInfo): ProjectSummary {
+  const sum = (key: keyof CalculatedRow) => rows.reduce((total, row) => total + (typeof row[key] === "number" ? row[key] as number : 0), 0);
+  const revenue = round(sum("revenue"));
+  const holdingReturns = round(sum("cumulativeReturn"));
+  const totalConstructionCost = round(sum("totalConstructionCost"));
+  const managementFeeBase = round(rows.reduce((total, row) => total + (row.saleArea > 0 ? row.revenue : row.totalConstructionCost), 0));
+  const managementFee = round(sum("managementFee"));
+  const salesFee = round(sum("salesFee"));
+  const vat = round(sum("vat"));
+  const totalCost = round(totalConstructionCost + managementFee + salesFee + vat);
+  const totalIncome = round(revenue + (project.includeHoldingReturns ? holdingReturns : 0));
+  const netProfit = round(totalIncome - totalCost);
+  const governmentArea = round(sum("governmentArea"));
+  return { revenue, holdingReturns, totalIncome, totalConstructionCost, managementFeeBase, managementFee, salesFee, vat,
+    totalCost, netProfit, roi: totalCost ? netProfit / totalCost : 0, governmentArea,
+    governmentRatio: project.totalBuildingArea ? governmentArea / project.totalBuildingArea : 0,
+    governmentCost: round(sum("governmentConstructionCost")) };
+}
+
+export function calculateProject(rows: AssetRow[], project: ProjectInfo, allocations: AllocationRule[]) {
+  const calculatedRows = calculateRows(rows, project, allocations);
+  return { rows: calculatedRows, summary: calculateSummary(calculatedRows, project) };
+}
+
+export interface CashFlowPoint {
+  month: number;
+  monthlySales: number;
+  monthlyCollection: number;
+  monthlyOutflow: number;
+  cumulativeSales: number;
+  cumulativeCollection: number;
+  cumulativeOutflow: number;
+  cumulativeNetCashFlow: number;
+}
+
+export interface SimulationRates {
+  managementRate: number;
+  salesRate: number;
+  vatRate: number;
+}
+
+export interface RowCollectionProjection {
+  rowId: string;
+  monthlySales: number[];
+  monthlyCollection: number[];
+  monthlySoldUnits: number[];
+  cumulativeSales: number[];
+  cumulativeCollection: number[];
+  cumulativeSoldUnits: number[];
+}
+
+export interface CollectionSchedule {
+  months: number;
+  monthlySales: number[];
+  monthlyCollection: number[];
+  rows: RowCollectionProjection[];
+}
+
+export function defaultCollectionLogic(row: AssetRow) {
+  if (!row.saleArea || normalizeAssetKind(row) !== "销售") return { firstSaleMonth: 0, deliveryMonth: 0, totalUnits: 0, monthlyAbsorptionUnits: 0, downPaymentRate: 0, monthlyCollectionRate: 0, tailInstallmentMonths: 0 };
+  if (row.collection) return row.collection;
+  const totalUnits = row.name.includes("公寓") ? Math.max(1, Math.round(row.saleArea / 56.16)) : Math.max(1, Math.round(row.saleArea / 100));
+  return { firstSaleMonth: row.name.includes("商业") ? 6 : 1, deliveryMonth: 24, totalUnits, monthlyAbsorptionUnits: Math.max(1, Math.ceil(totalUnits / 18)), downPaymentRate: .3, monthlyCollectionRate: .05, tailInstallmentMonths: 3 };
+}
+
+export function calculateCollectionSchedule(rows: CalculatedRow[], months = 36): CollectionSchedule {
+  const totalMonthlySales = Array(months).fill(0) as number[];
+  const totalMonthlyCollection = Array(months).fill(0) as number[];
+  const projections = rows.map(row => {
+    const logic = defaultCollectionLogic(row);
+    const monthlySales = Array(months).fill(0) as number[];
+    const monthlyCollection = Array(months).fill(0) as number[];
+    const monthlySoldUnits = Array(months).fill(0) as number[];
+    if (row.revenue > 0 && logic.totalUnits > 0 && logic.monthlyAbsorptionUnits > 0 && logic.firstSaleMonth > 0) {
+      let remainingUnits = logic.totalUnits;
+      for (let saleMonth = logic.firstSaleMonth; saleMonth <= months && remainingUnits > 0; saleMonth++) {
+        const units = Math.min(logic.monthlyAbsorptionUnits, remainingUnits);
+        remainingUnits -= units;
+        const cohortSales = row.revenue * units / logic.totalUnits;
+        monthlySoldUnits[saleMonth - 1] += units;
+        monthlySales[saleMonth - 1] += cohortSales;
+        let remainingPayment = cohortSales;
+        const downPayment = Math.min(remainingPayment, cohortSales * logic.downPaymentRate);
+        monthlyCollection[saleMonth - 1] += downPayment;
+        remainingPayment -= downPayment;
+        const readyMonth = Math.max(saleMonth + 1, logic.deliveryMonth || saleMonth + 1);
+        for (let month = saleMonth + 1; month < readyMonth && month <= months && remainingPayment > 0; month++) {
+          const progressPayment = Math.min(remainingPayment, cohortSales * logic.monthlyCollectionRate);
+          monthlyCollection[month - 1] += progressPayment;
+          remainingPayment -= progressPayment;
+        }
+        if (remainingPayment > 0) {
+          const installments = Math.max(1, logic.tailInstallmentMonths || 1);
+          const installment = remainingPayment / installments;
+          for (let offset = 0; offset < installments; offset++) {
+            const month = readyMonth + offset;
+            if (month <= months) monthlyCollection[month - 1] += installment;
+          }
+        }
+      }
+    }
+    const accumulate = (values: number[]) => { let total = 0; return values.map(value => round(total += value)); };
+    monthlySales.forEach((value, index) => totalMonthlySales[index] += value);
+    monthlyCollection.forEach((value, index) => totalMonthlyCollection[index] += value);
+    return { rowId: row.id, monthlySales: monthlySales.map(round), monthlyCollection: monthlyCollection.map(round), monthlySoldUnits, cumulativeSales: accumulate(monthlySales), cumulativeCollection: accumulate(monthlyCollection), cumulativeSoldUnits: accumulate(monthlySoldUnits) };
+  });
+  return { months, monthlySales: totalMonthlySales.map(round), monthlyCollection: totalMonthlyCollection.map(round), rows: projections };
+}
+
+export function calculateSimulationSummary(base: ProjectSummary, rates: SimulationRates) {
+  const managementFee = round(base.managementFeeBase * rates.managementRate);
+  const salesFee = round(base.revenue * rates.salesRate);
+  const vat = round(base.revenue * rates.vatRate);
+  const preTaxCost = round(base.totalConstructionCost + managementFee + salesFee + vat);
+  const profitBeforeTax = round(base.totalIncome - preTaxCost);
+  const totalCost = preTaxCost;
+  const netProfit = round(base.totalIncome - totalCost);
+  return {
+    profitBeforeTax,
+    summary: {
+      ...base, managementFee, salesFee, vat, totalCost, netProfit,
+      roi: totalCost ? netProfit / totalCost : 0
+    } satisfies ProjectSummary
+  };
+}
+
+/**
+ * MVP 月度推演模型：销售集中于第 4–24 月，回款平均滞后 2 个月，
+ * 项目支出集中于第 1–26 月。各月权重归一化，确保累计值与项目汇总完全一致。
+ */
+export function calculateCashFlowProjection(summary: ProjectSummary, months = 36, collectionSchedule?: CollectionSchedule, managementAllocationMonths = months): CashFlowPoint[] {
+  const bell = (month: number, start: number, end: number, center: number, spread: number) =>
+    month < start || month > end ? 0 : Math.exp(-Math.pow(month - center, 2) / (2 * spread * spread));
+  const normalize = (weights: number[]) => {
+    const total = weights.reduce((sum, value) => sum + value, 0);
+    return weights.map(value => total ? value / total : 0);
+  };
+  const salesWeights = normalize(Array.from({ length: months }, (_, i) => bell(i + 1, 4, 24, 12, 5.2)));
+  const collectionWeights = normalize(Array.from({ length: months }, (_, i) => {
+    const month = i + 1;
+    const current = salesWeights[i] * 0.2;
+    const lagged = month > 2 ? salesWeights[i - 2] * 0.8 : 0;
+    return current + lagged;
+  }));
+  const outflowWeights = normalize(Array.from({ length: months }, (_, i) => bell(i + 1, 1, 26, 11, 7)));
+  const effectiveSalesFeeRate = summary.revenue ? summary.salesFee / summary.revenue : 0;
+  const effectiveVatRate = summary.revenue ? summary.vat / summary.revenue : 0;
+  const residualCost = Math.max(0, summary.totalCost - summary.totalConstructionCost - summary.managementFee - summary.salesFee - summary.vat);
+  const managementMonths = Math.max(1, Math.min(months, Math.round(managementAllocationMonths)));
+  let cumulativeSales = 0, cumulativeCollection = 0, cumulativeOutflow = 0;
+  return Array.from({ length: months }, (_, i) => {
+    const monthlySales = round(collectionSchedule?.monthlySales[i] ?? summary.totalIncome * salesWeights[i]);
+    const monthlyCollection = round(collectionSchedule?.monthlyCollection[i] ?? summary.totalIncome * collectionWeights[i]);
+    const constructionOutflow = summary.totalConstructionCost * outflowWeights[i];
+    const managementOutflow = i < managementMonths ? summary.managementFee / managementMonths : 0;
+    const salesOutflow = monthlySales * effectiveSalesFeeRate;
+    const vatOutflow = monthlySales * effectiveVatRate;
+    const monthlyOutflow = round(constructionOutflow + managementOutflow + salesOutflow + vatOutflow + (i === months - 1 ? residualCost : 0));
+    cumulativeSales += monthlySales;
+    cumulativeCollection += monthlyCollection;
+    cumulativeOutflow += monthlyOutflow;
+    return {
+      month: i + 1, monthlySales, monthlyCollection, monthlyOutflow,
+      cumulativeSales: round(cumulativeSales), cumulativeCollection: round(cumulativeCollection),
+      cumulativeOutflow: round(cumulativeOutflow), cumulativeNetCashFlow: round(cumulativeCollection - cumulativeOutflow)
+    };
+  });
+}

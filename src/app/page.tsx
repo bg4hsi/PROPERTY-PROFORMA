@@ -1,0 +1,49 @@
+"use client";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Activity, BarChart3, Building2, ChevronDown, CircleDollarSign, Copy, Download, FolderPlus, Landmark, MapPin, Menu, Pencil, Printer, Trash2, Upload, WalletCards, X } from "lucide-react";
+import { useProjectStore } from "@/store/useProjectStore";
+import { calculateCollectionSchedule, calculateProject } from "@/lib/calculationEngine";
+import { exportExcel, importExcel } from "@/lib/excel";
+import { MetricCard } from "@/components/MetricCard";
+import { EditableTable } from "@/components/EditableTable";
+import { HoldingPanel } from "@/components/HoldingPanel";
+import { CashFlowChart } from "@/components/CashFlowChart";
+import { ProjectSettings } from "@/components/ProjectSettings";
+import { CollectionLogicPanel } from "@/components/CollectionLogicPanel";
+
+const number = (n:number, digits=0) => new Intl.NumberFormat("zh-CN",{maximumFractionDigits:digits,minimumFractionDigits:digits}).format(n||0);
+export default function Home() {
+  const store=useProjectStore(); const scenario=store.active(); const [mounted,setMounted]=useState(false); const [sidebar,setSidebar]=useState(false); const [cashFlowCutoff,setCashFlowCutoff]=useState(17); const fileRef=useRef<HTMLInputElement>(null);
+  useEffect(()=>setMounted(true),[]);
+  const result=useMemo(()=>calculateProject(scenario.rows,scenario.project,[]),[scenario.rows,scenario.project]);
+  const collectionSchedule=useMemo(()=>calculateCollectionSchedule(result.rows,36),[result.rows]);
+  if(!mounted) return <div className="flex min-h-screen items-center justify-center text-sm text-slate-500">正在打开测算工作台…</div>;
+  const money=(n:number)=>`${number(n,1)} 万元`;
+  const exportRows=result.rows.map(r=>({业态:r.name,类型:r.kind,建筑面积:r.buildingArea,分配政府面积:r.governmentArea,得房率:r.efficiencyRate,销售面积:r.saleArea,销售单价:r.salePrice,销售总额:r.revenue,建安成本合计:r.totalConstructionCost,管理费用:r.managementFee,销售费用:r.salesFee,增值税:r.vat,净利润:r.netProfit,单方成本含销管费:r.fullUnitCost,十年累计回报:r.cumulativeReturn,NPV:r.npv,IRR:r.irr}));
+  const onImport=async(file?:File)=>{if(!file)return;try{store.replaceActive(await importExcel(file,scenario));}catch(e){alert(e instanceof Error?e.message:"导入失败");}if(fileRef.current)fileRef.current.value="";};
+  return <div className="min-h-screen">
+    <aside className={`no-print fixed inset-y-0 left-0 z-50 w-72 border-r border-slate-200 bg-[#0d2a32] text-white transition-transform lg:translate-x-0 ${sidebar?"translate-x-0":"-translate-x-full"}`}>
+      <div className="flex h-20 items-center justify-between border-b border-white/10 px-5"><div className="flex items-center gap-3"><div className="rounded-xl bg-teal-500 p-2"><Building2 size={22}/></div><div><div className="font-semibold tracking-wide">投资测算 @Eric</div><div className="text-[11px] text-slate-400">PROPERTY PROFORMA</div></div></div><button className="lg:hidden" onClick={()=>setSidebar(false)}><X/></button></div>
+      <div className="p-4"><label className="mb-2 block text-[11px] uppercase tracking-wider text-slate-400">当前方案</label><div className="relative"><select className="w-full appearance-none rounded-xl border border-white/10 bg-white/10 px-3 py-3 pr-8 text-sm outline-none" value={store.activeId} onChange={e=>store.setActive(e.target.value)}>{store.scenarios.map(s=><option className="text-slate-900" key={s.id} value={s.id}>{s.name}</option>)}</select><ChevronDown size={15} className="pointer-events-none absolute right-3 top-3.5 text-slate-400"/></div>
+        <div className="mt-2 grid grid-cols-3 gap-2"><button className="rounded-lg bg-white/10 p-2 text-xs hover:bg-white/15" onClick={store.createScenario} title="新建"><FolderPlus size={15} className="mx-auto"/></button><button className="rounded-lg bg-white/10 p-2 text-xs hover:bg-white/15" onClick={store.duplicateScenario} title="复制"><Copy size={15} className="mx-auto"/></button><button className="rounded-lg bg-white/10 p-2 text-xs hover:bg-rose-500/30" onClick={store.deleteScenario} title="删除"><Trash2 size={15} className="mx-auto"/></button></div>
+      </div>
+      <nav className="mt-2 px-3 text-sm"><a href="#overview" className="flex items-center gap-3 rounded-xl bg-teal-500/20 px-4 py-3 text-teal-200"><BarChart3 size={18}/>项目总览</a><a href="#project-settings" className="mt-1 flex items-center gap-3 rounded-xl px-4 py-3 text-slate-300 hover:bg-white/5"><Landmark size={18}/>项目设置</a><a href="#main-table" className="mt-1 flex items-center gap-3 rounded-xl px-4 py-3 text-slate-300 hover:bg-white/5"><WalletCards size={18}/>投资主表</a><a href="#collection-logic" className="mt-1 flex items-center gap-3 rounded-xl px-4 py-3 text-slate-300 hover:bg-white/5"><CircleDollarSign size={18}/>回款逻辑</a><a href="#cash-flow" className="mt-1 flex items-center gap-3 rounded-xl px-4 py-3 text-slate-300 hover:bg-white/5"><Activity size={18}/>现金流量</a><a href="#holding" className="mt-1 flex items-center gap-3 rounded-xl px-4 py-3 text-slate-300 hover:bg-white/5"><Building2 size={18}/>10年回报</a></nav>
+      <div className="absolute bottom-5 left-4 right-4 rounded-xl border border-white/10 bg-white/5 p-4 text-xs text-slate-400"><div className="mb-2 flex justify-between"><span>本地自动保存</span><span className="text-emerald-400">● 已开启</span></div>数据仅保存在当前浏览器中</div>
+    </aside>
+    <div className="lg:pl-72">
+      <header className="sticky top-0 z-30 flex h-20 items-center justify-between border-b border-slate-200 bg-white/90 px-4 backdrop-blur md:px-7"><div className="flex min-w-0 items-center gap-3"><button className="no-print rounded-lg border p-2 lg:hidden" onClick={()=>setSidebar(true)}><Menu size={20}/></button><div className="min-w-0"><div className="flex items-center gap-2"><input className="min-w-0 truncate bg-transparent text-lg font-bold text-slate-900 outline-none" value={scenario.name} onChange={e=>store.renameScenario(e.target.value)}/><Pencil size={13} className="text-slate-400"/></div><div className="mt-0.5 flex items-center gap-1 text-xs text-slate-500"><MapPin size={12}/><input aria-label="项目地点" className="w-44 bg-transparent outline-none transition focus:text-teal-700" value={scenario.project.location||""} placeholder="请输入项目地点" onChange={e=>store.updateProject({location:e.target.value})}/><Pencil size={11} className="text-slate-300"/></div></div></div>
+        <div className="actions no-print flex items-center gap-2"><input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={e=>onImport(e.target.files?.[0])}/><button className="btn hidden sm:inline-flex" onClick={()=>fileRef.current?.click()}><Upload size={15}/>导入</button><button className="btn hidden sm:inline-flex" onClick={()=>exportExcel(scenario,exportRows)}><Download size={15}/>Excel</button><button className="btn btn-primary" onClick={()=>window.print()}><Printer size={15}/>导出 PDF</button></div></header>
+      <main className="space-y-6 p-4 md:p-7" id="overview">
+        <div><p className="text-sm font-medium text-teal-700">投资测算工作台</p><h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">项目财务总览</h1><p className="mt-1 text-sm text-slate-500">基于当前面积、售价与成本参数实时测算</p></div>
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><MetricCard label="项目总收入" value={money(result.summary.totalIncome)} hint={scenario.project.includeHoldingReturns?`含经营回报 ${money(result.summary.holdingReturns)}`:"仅含销售收入"} icon={<CircleDollarSign size={20}/>}/><MetricCard label="项目总成本" value={money(result.summary.totalCost)} hint={`建安成本 ${money(result.summary.totalConstructionCost)}`} icon={<WalletCards size={20}/>}/><MetricCard label="项目净利润" value={money(result.summary.netProfit)} hint={`利润率 ${result.summary.totalIncome?number(result.summary.netProfit/result.summary.totalIncome*100,1):0}%`} icon={<BarChart3 size={20}/>}/><MetricCard label="项目回报率" value={`${number(result.summary.roi*100,1)}%`} hint="净利润 ÷ 项目总成本" icon={<Landmark size={20}/>}/></div>
+        <div className="grid gap-4 md:grid-cols-3"><div className="card border-l-4 border-l-amber-400 p-4"><div className="text-xs text-slate-500">政府分配总面积</div><div className="mt-1 text-xl font-bold">{number(result.summary.governmentArea)} ㎡</div><div className="mt-1 text-xs text-amber-700">占总建筑面积 {number(result.summary.governmentRatio*100,2)}%</div></div><div className="card border-l-4 border-l-amber-400 p-4"><div className="text-xs text-slate-500">政府部分总成本</div><div className="mt-1 text-xl font-bold">{money(result.summary.governmentCost)}</div><div className="mt-1 text-xs text-slate-400">按各业态单方成本测算</div></div><div className="card border-l-4 border-l-sky-400 p-4"><div className="text-xs text-slate-500">自持业态累计回报</div><div className="mt-1 text-xl font-bold">{money(result.summary.holdingReturns)}</div><div className="mt-1 text-xs text-slate-400">根据各业态持有年限累计</div></div></div>
+        <ProjectSettings project={scenario.project} updateProject={store.updateProject}/>
+        <div id="main-table"><EditableTable rows={result.rows} summary={result.summary} updateRow={store.updateRow} addRow={store.addRow} duplicateRow={store.duplicateRow} deleteRow={store.deleteRow}/></div>
+        <CollectionLogicPanel rows={result.rows} cutoffMonth={cashFlowCutoff} setCutoffMonth={setCashFlowCutoff} updateRow={store.updateRow}/>
+        <CashFlowChart summary={result.summary} project={scenario.project} collectionSchedule={collectionSchedule} cutoffMonth={cashFlowCutoff}/>
+        <HoldingPanel rows={result.rows} include={scenario.project.includeHoldingReturns} setInclude={value=>store.updateProject({includeHoldingReturns:value})} updateRow={store.updateRow}/>
+        <footer className="pb-4 text-center text-xs text-slate-400">投资测算 · 数据自动保存在本地浏览器 · 项目金额统一按万元展示</footer>
+      </main>
+    </div>
+  </div>;
+}
