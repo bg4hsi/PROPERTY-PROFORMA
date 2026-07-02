@@ -50,8 +50,9 @@ export function calculateRows(rows: AssetRow[], project: ProjectInfo, _allocatio
   const governmentCostPool = round(normalizedRows.reduce((total, row) => total + (row.kind === "给政府" ? row.buildingArea * row.unitCost / 10000 : 0), 0));
   const saleableBuildingArea = normalizedRows.reduce((total, row) => total + (row.kind === "销售" ? row.buildingArea : 0), 0);
   const landTotalPrice = Math.max(0, project.landTotalPrice ?? 0);
+  // 土地总价先按各业态建筑面积分摊；地库、车位不参与。
   const landAllocationBasis = new Map(normalizedRows.map(row => [row.id,
-    isBasementOrParking(row) ? 0 : row.kind === "销售" ? row.saleArea : row.kind !== "给政府" ? row.buildingArea : 0
+    isBasementOrParking(row) || row.kind === "给政府" ? 0 : row.buildingArea
   ]));
   const totalLandAllocationBasis = [...landAllocationBasis.values()].reduce((total, value) => total + value, 0);
 
@@ -64,12 +65,13 @@ export function calculateRows(rows: AssetRow[], project: ProjectInfo, _allocatio
     const saleAndHoldCost = round(Math.max(0, row.buildingArea - row.governmentArea) * row.unitCost / 10000);
     const totalConstructionCost = round(saleAndHoldCost + governmentConstructionCost + secondaryAllocation);
     const isSaleable = row.saleArea > 0;
-    // 政府模型保持原有“销售面积折算单方”的口径；地库排除规则仅作用于土地总价模型。
-    const rowLandBasis = governmentMode ? row.saleArea : (landAllocationBasis.get(row.id) || 0);
+    const rowLandAllocationBasis = landAllocationBasis.get(row.id) || 0;
     const allocatedLandCost = governmentMode
       ? row.kind === "销售" && saleableBuildingArea > 0 ? round(governmentCostPool * row.buildingArea / saleableBuildingArea) : 0
-      : totalLandAllocationBasis > 0 ? round(landTotalPrice * rowLandBasis / totalLandAllocationBasis) : 0;
-    const allocatedLandUnitCost = rowLandBasis > 0 ? round(allocatedLandCost * 10000 / rowLandBasis) : 0;
+      : totalLandAllocationBasis > 0 ? round(landTotalPrice * rowLandAllocationBasis / totalLandAllocationBasis) : 0;
+    // 可售业态按销售面积折单方，非可售业态按建筑面积折单方。
+    const rowLandUnitBasis = governmentMode || row.kind === "销售" ? row.saleArea : row.buildingArea;
+    const allocatedLandUnitCost = rowLandUnitBasis > 0 ? round(allocatedLandCost * 10000 / rowLandUnitBasis) : 0;
     const managementBase = isSaleable ? revenue : totalConstructionCost;
     const managementFee = round(row.manualManagementFee ?? managementBase * project.managementRate);
     const salesFee = isSaleable ? round(row.manualSalesFee ?? revenue * project.salesRate) : 0;
