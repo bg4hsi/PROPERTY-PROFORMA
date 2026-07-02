@@ -54,7 +54,7 @@ export function calculateRows(rows: AssetRow[], project: ProjectInfo, _allocatio
     const managementBase = isSaleable ? revenue : totalConstructionCost;
     const managementFee = round(row.manualManagementFee ?? managementBase * project.managementRate);
     const salesFee = isSaleable ? round(row.manualSalesFee ?? revenue * project.salesRate) : 0;
-    const vat = round(revenue * project.vatRate);
+    const vat = round(project.vatRate > 0 ? revenue / (1 + project.vatRate) * project.vatRate : 0);
     const netProfit = isSaleable ? round(revenue - totalConstructionCost - managementFee - salesFee - vat) : 0;
     const fullUnitCost = row.buildingArea ? round((totalConstructionCost + managementFee + salesFee) * 10000 / row.buildingArea) : 0;
     const isHotel = row.kind === "自持酒店";
@@ -195,7 +195,7 @@ export function calculateCollectionSchedule(rows: CalculatedRow[], months = 36):
 export function calculateSimulationSummary(base: ProjectSummary, rates: SimulationRates) {
   const managementFee = round(base.managementFeeBase * rates.managementRate);
   const salesFee = round(base.revenue * rates.salesRate);
-  const vat = round(base.revenue * rates.vatRate);
+  const vat = round(rates.vatRate > 0 ? base.revenue / (1 + rates.vatRate) * rates.vatRate : 0);
   const preTaxCost = round(base.totalConstructionCost + managementFee + salesFee + vat);
   const profitBeforeTax = round(base.totalIncome - preTaxCost);
   const totalCost = preTaxCost;
