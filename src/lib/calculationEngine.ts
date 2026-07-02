@@ -59,6 +59,8 @@ export function calculateRows(rows: AssetRow[], project: ProjectInfo, _allocatio
     const managementFee = round(row.manualManagementFee ?? managementBase * project.managementRate);
     const salesFee = isSaleable ? round(row.manualSalesFee ?? revenue * project.salesRate) : 0;
     const vat = round(project.vatRate > 0 ? revenue / (1 + project.vatRate) * project.vatRate : 0);
+    // 股东计息依赖项目逐月资金缺口，在 calculateProject 中统一计算后再分摊到各业态。
+    const shareholderInterest = 0;
     const netProfit = isSaleable ? round(revenue - totalConstructionCost - allocatedLandCost - managementFee - salesFee - vat) : 0;
     const fullUnitCost = row.buildingArea ? round((totalConstructionCost + allocatedLandCost + managementFee + salesFee) * 10000 / row.buildingArea) : 0;
     const isHotel = row.kind === "自持酒店";
@@ -77,7 +79,7 @@ export function calculateRows(rows: AssetRow[], project: ProjectInfo, _allocatio
     const cumulativeReturn = holding ? round(annualNetCashFlow * holding.holdingYears) : 0;
     const cashflows = holding ? [-totalConstructionCost, ...Array(holding.holdingYears).fill(annualNetCashFlow)] : [];
     return { ...row, holding, revenue, baseConstructionCost, governmentConstructionCost, secondaryAllocation,
-      totalConstructionCost, allocatedLandCost, allocatedLandUnitCost, managementFee, salesFee, vat, netProfit, fullUnitCost, annualNetCashFlow, paybackPeriod,
+      totalConstructionCost, allocatedLandCost, allocatedLandUnitCost, managementFee, salesFee, vat, shareholderInterest, netProfit, fullUnitCost, annualNetCashFlow, paybackPeriod,
       cumulativeReturn, npv: holding ? round(npv(holding.discountRate, cashflows)) : 0,
       irr: holding ? irr(cashflows) : null };
   });
@@ -94,14 +96,15 @@ export function calculateSummary(rows: CalculatedRow[], project: ProjectInfo): P
   const managementFee = round(sum("managementFee"));
   const salesFee = round(sum("salesFee"));
   const vat = round(sum("vat"));
-  const totalCost = round(totalConstructionCost + managementFee + salesFee + vat);
+  const shareholderInterest = round(sum("shareholderInterest"));
+  const totalCost = round(totalConstructionCost + managementFee + salesFee + vat + shareholderInterest);
   const totalIncome = round(revenue + (project.includeHoldingReturns ? holdingReturns : 0));
   const netProfitExcludingHoldingReturns = round(revenue - totalCost);
   const netProfitIncludingHoldingReturns = round(revenue + holdingReturns - totalCost);
   const netProfit = project.includeHoldingReturns ? netProfitIncludingHoldingReturns : netProfitExcludingHoldingReturns;
   const governmentArea = round(sum("governmentArea"));
   return { revenue, holdingReturns, holdingAnnualNetCashFlow, includeHoldingReturns: project.includeHoldingReturns,
-    totalIncome, totalConstructionCost, managementFeeBase, managementFee, salesFee, vat,
+    totalIncome, totalConstructionCost, managementFeeBase, managementFee, salesFee, vat, shareholderInterest,
     totalCost, netProfit, roi: totalCost ? netProfit / totalCost : 0,
     netProfitExcludingHoldingReturns, netProfitIncludingHoldingReturns,
     roiExcludingHoldingReturns: totalCost ? netProfitExcludingHoldingReturns / totalCost : 0,
@@ -111,7 +114,26 @@ export function calculateSummary(rows: CalculatedRow[], project: ProjectInfo): P
 }
 
 export function calculateProject(rows: AssetRow[], project: ProjectInfo, allocations: AllocationRule[]) {
-  const calculatedRows = calculateRows(rows, project, allocations);
+  const baseRows = calculateRows(rows, project, allocations);
+  const baseSummary = calculateSummary(baseRows, project);
+  const months = 36;
+  const collectionSchedule = calculateCollectionSchedule(baseRows, months);
+  const cashFlow = calculateCashFlowProjection(baseSummary, months, collectionSchedule, project.deliveryMonth || 24, project.trialOperationMonths ?? 3);
+  const monthlyRate = Math.max(0, project.shareholderInterestRate ?? .08) / 12;
+  const shareholderInterestTotal = round(cashFlow.reduce((total, point) => total + Math.max(0, -point.cumulativeNetCashFlow) * monthlyRate, 0));
+  const interestBase = baseRows.reduce((total, row) => total + row.totalConstructionCost, 0);
+  const interestRows = baseRows.filter(row => row.totalConstructionCost > 0);
+  let remainingInterest = shareholderInterestTotal;
+  const calculatedRows = baseRows.map(row => {
+    let shareholderInterest = 0;
+    if (interestBase > 0 && row.totalConstructionCost > 0) {
+      const isLast = row.id === interestRows[interestRows.length - 1]?.id;
+      shareholderInterest = isLast ? remainingInterest : round(shareholderInterestTotal * row.totalConstructionCost / interestBase);
+      remainingInterest = round(remainingInterest - shareholderInterest);
+    }
+    const netProfit = row.kind === "销售" ? round(row.netProfit - shareholderInterest) : 0;
+    return { ...row, shareholderInterest, netProfit };
+  });
   return { rows: calculatedRows, summary: calculateSummary(calculatedRows, project) };
 }
 
@@ -205,7 +227,7 @@ export function calculateSimulationSummary(base: ProjectSummary, rates: Simulati
   const managementFee = round(base.managementFeeBase * rates.managementRate);
   const salesFee = round(base.revenue * rates.salesRate);
   const vat = round(rates.vatRate > 0 ? base.revenue / (1 + rates.vatRate) * rates.vatRate : 0);
-  const preTaxCost = round(base.totalConstructionCost + managementFee + salesFee + vat);
+  const preTaxCost = round(base.totalConstructionCost + managementFee + salesFee + vat + base.shareholderInterest);
   const profitBeforeTax = round(base.totalIncome - preTaxCost);
   const totalCost = preTaxCost;
   const netProfitExcludingHoldingReturns = round(base.revenue - totalCost);
@@ -244,7 +266,8 @@ export function calculateCashFlowProjection(summary: ProjectSummary, months = 36
   const constructionEndMonth = Math.max(1, Math.min(months, Math.round(deliveryMonth)));
   const effectiveSalesFeeRate = summary.revenue ? summary.salesFee / summary.revenue : 0;
   const effectiveVatRate = summary.revenue ? summary.vat / summary.revenue : 0;
-  const residualCost = Math.max(0, summary.totalCost - summary.totalConstructionCost - summary.managementFee - summary.salesFee - summary.vat);
+  // 股东计息是利润测算项，不作为实际现金支出进入资金动态曲线。
+  const residualCost = Math.max(0, summary.totalCost - summary.totalConstructionCost - summary.managementFee - summary.salesFee - summary.vat - summary.shareholderInterest);
   const managementMonths = constructionEndMonth;
   const operationStartMonth = Math.max(1, Math.round(deliveryMonth) + Math.max(0, Math.round(trialOperationMonths)) + 1);
   const monthlyHoldingCashFlow = summary.includeHoldingReturns ? summary.holdingAnnualNetCashFlow / 12 : 0;

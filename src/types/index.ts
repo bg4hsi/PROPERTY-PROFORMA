@@ -13,6 +13,7 @@ export interface ProjectInfo {
   vatRate: number;
   managementRate: number;
   salesRate: number;
+  shareholderInterestRate: number;
   deliveryMonth: number;
   trialOperationMonths: number;
   hotelAverageDailyRate: number;
@@ -89,6 +90,7 @@ export interface CalculatedRow extends AssetRow {
   managementFee: number;
   salesFee: number;
   vat: number;
+  shareholderInterest: number;
   netProfit: number;
   fullUnitCost: number;
   annualNetCashFlow: number;
@@ -109,6 +111,7 @@ export interface ProjectSummary {
   managementFee: number;
   salesFee: number;
   vat: number;
+  shareholderInterest: number;
   totalCost: number;
   netProfit: number;
   roi: number;
