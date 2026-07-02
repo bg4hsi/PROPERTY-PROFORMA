@@ -84,6 +84,7 @@ export interface CalculatedRow extends AssetRow {
   governmentConstructionCost: number;
   secondaryAllocation: number;
   totalConstructionCost: number;
+  allocatedLandCost: number;
   managementFee: number;
   salesFee: number;
   vat: number;

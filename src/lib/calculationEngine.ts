@@ -41,6 +41,8 @@ export function calculateRows(rows: AssetRow[], project: ProjectInfo, _allocatio
     return { ...row, kind, efficiencyRate, saleArea, governmentArea };
   });
   const revenues = new Map(normalizedRows.map(row => [row.id, round(row.saleArea * row.salePrice / 10000)]));
+  const governmentCostPool = round(normalizedRows.reduce((total, row) => total + (row.kind === "给政府" ? row.buildingArea * row.unitCost / 10000 : 0), 0));
+  const saleableBuildingArea = normalizedRows.reduce((total, row) => total + (row.kind === "销售" ? row.buildingArea : 0), 0);
 
   return normalizedRows.map(row => {
     const revenue = revenues.get(row.id) || 0;
@@ -51,12 +53,13 @@ export function calculateRows(rows: AssetRow[], project: ProjectInfo, _allocatio
     const saleAndHoldCost = round(Math.max(0, row.buildingArea - row.governmentArea) * row.unitCost / 10000);
     const totalConstructionCost = round(saleAndHoldCost + governmentConstructionCost + secondaryAllocation);
     const isSaleable = row.saleArea > 0;
+    const allocatedLandCost = row.kind === "销售" && saleableBuildingArea > 0 ? round(governmentCostPool * row.buildingArea / saleableBuildingArea) : 0;
     const managementBase = isSaleable ? revenue : totalConstructionCost;
     const managementFee = round(row.manualManagementFee ?? managementBase * project.managementRate);
     const salesFee = isSaleable ? round(row.manualSalesFee ?? revenue * project.salesRate) : 0;
     const vat = round(project.vatRate > 0 ? revenue / (1 + project.vatRate) * project.vatRate : 0);
-    const netProfit = isSaleable ? round(revenue - totalConstructionCost - managementFee - salesFee - vat) : 0;
-    const fullUnitCost = row.buildingArea ? round((totalConstructionCost + managementFee + salesFee) * 10000 / row.buildingArea) : 0;
+    const netProfit = isSaleable ? round(revenue - totalConstructionCost - allocatedLandCost - managementFee - salesFee - vat) : 0;
+    const fullUnitCost = row.buildingArea ? round((totalConstructionCost + allocatedLandCost + managementFee + salesFee) * 10000 / row.buildingArea) : 0;
     const isHotel = row.kind === "自持酒店";
     const isCommercial = row.kind === "自持商业";
     const isOtherHolding = row.kind === "其他自持";
@@ -73,7 +76,7 @@ export function calculateRows(rows: AssetRow[], project: ProjectInfo, _allocatio
     const cumulativeReturn = holding ? round(annualNetCashFlow * holding.holdingYears) : 0;
     const cashflows = holding ? [-totalConstructionCost, ...Array(holding.holdingYears).fill(annualNetCashFlow)] : [];
     return { ...row, holding, revenue, baseConstructionCost, governmentConstructionCost, secondaryAllocation,
-      totalConstructionCost, managementFee, salesFee, vat, netProfit, fullUnitCost, annualNetCashFlow, paybackPeriod,
+      totalConstructionCost, allocatedLandCost, managementFee, salesFee, vat, netProfit, fullUnitCost, annualNetCashFlow, paybackPeriod,
       cumulativeReturn, npv: holding ? round(npv(holding.discountRate, cashflows)) : 0,
       irr: holding ? irr(cashflows) : null };
   });
