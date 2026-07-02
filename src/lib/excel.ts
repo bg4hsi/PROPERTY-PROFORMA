@@ -10,7 +10,7 @@ const headers: Record<string, keyof AssetRow> = {
 export async function exportExcel(scenario: Scenario, calculated: Record<string, unknown>[]) {
   const XLSX = await import("xlsx");
   const inputSheet = XLSX.utils.json_to_sheet(scenario.rows.map(row => ({
-    "业态": row.name, "类型": normalizeAssetKind(row), "建筑面积（平方米）": row.buildingArea, "给政府面积（平方米）": normalizeAssetKind(row)==="给政府"?row.buildingArea:0,
+    "业态": row.name, "类型": normalizeAssetKind(row), "建筑面积（平方米）": row.buildingArea,
     "得房率": row.efficiencyRate ?? (row.buildingArea ? row.saleArea / row.buildingArea : 0), "销售面积（平方米）": row.buildingArea * (row.efficiencyRate ?? (row.buildingArea ? row.saleArea / row.buildingArea : 0)), "销售单价（元/平方米）": row.salePrice, "单方成本（元/平方米）": row.unitCost,
     "管理费用覆盖（万元）": row.manualManagementFee, "销售费用覆盖（万元）": row.manualSalesFee,
     "首售月": defaultCollectionLogic(row).firstSaleMonth, "交付月": defaultCollectionLogic(row).deliveryMonth, "总套数": defaultCollectionLogic(row).totalUnits,
