@@ -1,5 +1,5 @@
 export type CurrencyUnit = "万元" | "元" | "美元";
-export type AssetKind = "销售" | "给政府" | "自持酒店" | "自持商业" | "其他自持" | "车位";
+export type AssetKind = "销售" | "给政府" | "自持酒店" | "自持商业" | "其他自持";
 export type AllocationMethod = "buildingArea" | "saleArea" | "revenue" | "manual";
 
 export interface ProjectInfo {

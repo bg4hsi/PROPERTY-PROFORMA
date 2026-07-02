@@ -16,7 +16,6 @@ export function CashFlowChart({ summary, project, collectionSchedule, cutoffMont
   const simulation = useMemo(() => calculateSimulationSummary(summary, { managementRate: project.managementRate, salesRate: project.salesRate, vatRate: project.vatRate }), [summary, project.managementRate, project.salesRate, project.vatRate]);
   const data = useMemo(() => calculateCashFlowProjection(simulation.summary, months, collectionSchedule, project.deliveryMonth || 24), [simulation.summary, collectionSchedule, project.deliveryMonth]);
   const point = data[Math.max(0, cutoffMonth - 1)];
-  const last = data[data.length - 1];
 
   const width = 1280, height = 500, left = 78, right = 88, top = 34, bottom = 82;
   const plotW = width - left - right, plotH = height - top - bottom;
@@ -35,11 +34,16 @@ export function CashFlowChart({ summary, project, collectionSchedule, cutoffMont
     ["累计销售额", colors.sales, "line"], ["累计回款", colors.collection, "line"], ["累计支出", colors.outflow, "line"], ["累计净现金流", colors.net, "line"]
   ];
   const hovered = hoveredMonth === null ? null : data[hoveredMonth];
-  const tooltipX = hoveredMonth === null ? 0 : Math.min(width-right-345, Math.max(left+8, x(hoveredMonth)+18));
+  const tooltipWidth = 335, tooltipGap = 20;
+  const hoveredX = hoveredMonth === null ? 0 : x(hoveredMonth);
+  const tooltipSide = hoveredX > left + plotW / 2 ? "left" : "right";
+  const tooltipX = hoveredMonth === null ? 0 : tooltipSide === "left"
+    ? Math.max(left + 8, hoveredX - tooltipWidth - tooltipGap)
+    : Math.min(width - right - tooltipWidth, hoveredX + tooltipGap);
 
   return <section className="space-y-4" id="cash-flow">
     <div className="card overflow-hidden">
-      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 px-5 py-5"><div><h2 className="text-lg font-bold text-slate-900">项目全周期资金动态推演曲线</h2><p className="mt-1 text-xs text-slate-500">鼠标悬停月份查看当月与累计资金明细</p></div><div className={`rounded-xl px-4 py-2 text-right ${last.cumulativeNetCashFlow >= 0 ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}`}><div className="text-[11px] opacity-70">期末累计净现金流</div><div className="font-bold tabular-nums">{money(last.cumulativeNetCashFlow)} 万元</div></div></div>
+      <div className="border-b border-slate-100 px-5 py-5"><h2 className="text-lg font-bold text-slate-900">项目全周期资金动态推演曲线</h2><p className="mt-1 text-xs text-slate-500">鼠标悬停月份查看当月与累计资金明细</p></div>
       <div className="overflow-x-auto px-3 pb-4"><svg viewBox={`0 0 ${width} ${height}`} className="min-w-[900px] w-full" role="img" aria-label="项目全周期现金流量图" onMouseLeave={()=>setHoveredMonth(null)}>
         {ticks.map((ratio, i) => { const y = top + ratio * plotH; return <g key={i}><line x1={left} x2={width-right} y1={y} y2={y} stroke="#e5e7eb" strokeDasharray="5 6"/><text x={left-12} y={y+5} textAnchor="end" fill="#64748b" fontSize="13">{money(maxMonthly * (1-ratio))}</text><text x={width-right+13} y={y+5} fill="#64748b" fontSize="13">{money(maxCum-ratio*(maxCum-minCum))}</text></g>; })}
         <line x1={left} x2={width-right} y1={cumulativeY(0)} y2={cumulativeY(0)} stroke="#cbd5e1"/>
@@ -49,7 +53,7 @@ export function CashFlowChart({ summary, project, collectionSchedule, cutoffMont
         {([["cumulativeSales",colors.sales],["cumulativeCollection",colors.collection],["cumulativeOutflow",colors.outflow],["cumulativeNetCashFlow",colors.net]] as Array<[keyof CashFlowPoint,string]>).map(([key,color])=><circle key={key} cx={x(cutoffMonth-1)} cy={cumulativeY(point[key] as number)} r="5" fill="white" stroke={color} strokeWidth="3"/>)}
         {hovered && <g pointerEvents="none"><line x1={x(hoveredMonth!)} x2={x(hoveredMonth!)} y1={top} y2={top+plotH} stroke="#64748b" strokeWidth="1.5"/>{([["cumulativeSales",colors.sales],["cumulativeCollection",colors.collection],["cumulativeOutflow",colors.outflow],["cumulativeNetCashFlow",colors.net]] as Array<[keyof CashFlowPoint,string]>).map(([key,color])=><circle key={key} cx={x(hoveredMonth!)} cy={cumulativeY(hovered[key] as number)} r="5" fill="white" stroke={color} strokeWidth="3"/>)}</g>}
         {data.map((d,i)=><rect key={`hit-${d.month}`} x={left+i*plotW/data.length} y={top} width={plotW/data.length} height={plotH} fill="transparent" onMouseEnter={()=>setHoveredMonth(i)} onMouseMove={()=>setHoveredMonth(i)}><title>第{d.month}个月</title></rect>)}
-        {hovered && <foreignObject x={tooltipX} y={top+14} width="335" height="260" pointerEvents="none"><div className="rounded-xl border border-slate-200 bg-white p-4 shadow-xl"><div className="mb-2 text-lg font-bold text-slate-900">第{hovered.month}个月</div><div className="space-y-1.5 text-sm font-medium tabular-nums"><div style={{color:colors.salesBar}}>当月新增销售：{money2(hovered.monthlySales)} 万元</div><div style={{color:colors.collectionBar}}>当月实际回款：{money2(hovered.monthlyCollection)} 万元</div><div style={{color:colors.outflowBar}}>当月项目支出：{money2(hovered.monthlyOutflow)} 万元</div><div className="my-2 border-t border-slate-100"/><div style={{color:colors.sales}}>累计销售额：{money2(hovered.cumulativeSales)} 万元</div><div style={{color:colors.collection}}>累计回款：{money2(hovered.cumulativeCollection)} 万元</div><div style={{color:colors.outflow}}>累计支出：{money2(hovered.cumulativeOutflow)} 万元</div><div style={{color:colors.net}}>累计净现金流：{money2(hovered.cumulativeNetCashFlow)} 万元</div></div></div></foreignObject>}
+        {hovered && <foreignObject x={tooltipX} y={top+14} width={tooltipWidth} height="260" pointerEvents="none" data-tooltip-side={tooltipSide}><div className="rounded-xl border border-slate-200 bg-white p-4 shadow-xl"><div className="mb-2 text-lg font-bold text-slate-900">第{hovered.month}个月</div><div className="space-y-1.5 text-sm font-medium tabular-nums"><div style={{color:colors.salesBar}}>当月新增销售：{money2(hovered.monthlySales)} 万元</div><div style={{color:colors.collectionBar}}>当月实际回款：{money2(hovered.monthlyCollection)} 万元</div><div style={{color:colors.outflowBar}}>当月项目支出：{money2(hovered.monthlyOutflow)} 万元</div><div className="my-2 border-t border-slate-100"/><div style={{color:colors.sales}}>累计销售额：{money2(hovered.cumulativeSales)} 万元</div><div style={{color:colors.collection}}>累计回款：{money2(hovered.cumulativeCollection)} 万元</div><div style={{color:colors.outflow}}>累计支出：{money2(hovered.cumulativeOutflow)} 万元</div><div style={{color:colors.net}}>累计净现金流：{money2(hovered.cumulativeNetCashFlow)} 万元</div></div></div></foreignObject>}
         <g transform={`translate(${left},${height-25})`}>{legend.map(([label,color,type],i)=>{const itemX=i*155;return <g key={label} transform={`translate(${itemX},0)`}>{type==="bar"?<rect width="18" height="12" y="-10" rx="2" fill={color}/>:<><line x1="0" x2="20" y1="-4" y2="-4" stroke={color} strokeWidth="3"/><circle cx="10" cy="-4" r="3" fill="white" stroke={color} strokeWidth="2"/></>}<text x="26" y="0" fill={color} fontSize="13" fontWeight="600">{label}</text></g>})}</g>
       </svg></div>
     </div>

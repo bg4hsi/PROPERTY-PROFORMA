@@ -5,7 +5,9 @@ const round = (n: number) => Math.round((safe(n) + Number.EPSILON) * 10000) / 10
 
 export function normalizeAssetKind(row: Pick<AssetRow, "kind"|"name">): AssetKind {
   const kind = String(row.kind);
-  if (["销售","给政府","自持酒店","自持商业","其他自持","车位"].includes(kind)) return kind as AssetKind;
+  if (["销售","给政府","自持酒店","自持商业","其他自持"].includes(kind)) return kind as AssetKind;
+  // 旧方案中的“车位”并入销售分类，确保历史数据仍可正常打开。
+  if (kind === "车位") return "销售";
   if (kind === "政府") return "给政府";
   if (kind === "自持") {
     if (row.name.includes("酒店")) return "自持酒店";
@@ -34,8 +36,9 @@ export function calculateRows(rows: AssetRow[], project: ProjectInfo, _allocatio
   const normalizedRows = rows.map(row => {
     const kind = normalizeAssetKind(row);
     const efficiencyRate = row.efficiencyRate ?? (row.buildingArea ? row.saleArea / row.buildingArea : 0);
-    const saleArea = kind === "销售" || kind === "车位" ? round(row.buildingArea * efficiencyRate) : 0;
-    return { ...row, kind, efficiencyRate, saleArea };
+    const saleArea = kind === "销售" ? round(row.buildingArea * efficiencyRate) : 0;
+    const governmentArea = kind === "给政府" ? round(row.buildingArea) : 0;
+    return { ...row, kind, efficiencyRate, saleArea, governmentArea };
   });
   const revenues = new Map(normalizedRows.map(row => [row.id, round(row.saleArea * row.salePrice / 10000)]));
 

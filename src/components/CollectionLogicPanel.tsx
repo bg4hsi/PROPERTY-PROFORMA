@@ -5,7 +5,7 @@ import { AssetRow, CalculatedRow, CollectionLogic } from "@/types";
 const fmt = (value: number, digits = 0) => new Intl.NumberFormat("zh-CN", { maximumFractionDigits: digits }).format(value || 0);
 
 export function CollectionLogicPanel({ rows, cutoffMonth, setCutoffMonth, updateRow }: { rows: CalculatedRow[]; cutoffMonth: number; setCutoffMonth: (month: number) => void; updateRow: (id: string, patch: Partial<AssetRow>) => void }) {
-  const salesRows = rows.filter(row => row.kind === "销售" && (row.saleArea > 0 || row.revenue > 0));
+  const salesRows = rows.filter(row => row.kind === "销售");
   const schedule = calculateCollectionSchedule(rows, 36);
   const updateLogic = (row: CalculatedRow, key: keyof CollectionLogic, value: number) => updateRow(row.id, { collection: { ...defaultCollectionLogic(row), [key]: value } });
   const fields: Array<[keyof CollectionLogic, string, boolean]> = [

@@ -28,6 +28,6 @@ export const sampleScenario: Scenario = {
     row("mall", "MALL（自持）", "自持商业", 24600, 0, 0, 0, 7642),
     { ...row("street-sale", "商业街（销售）", "销售", 4200, 0, 4200, 35000, 5933), collection: collection(6, 24, 42, 3, .5, .1, 6) },
     row("street-hold", "商业街（自持）", "自持商业", 4200, 0, 0, 0, 5933),
-    { ...row("parking", "车位", "销售", 0, 0, 0, 0, 0), kind: "车位" }
+    row("parking", "车位", "销售", 0, 0, 0, 0, 0)
   ], allocations: []
 };
