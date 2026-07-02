@@ -12,7 +12,7 @@ const collection = (firstSaleMonth: number, deliveryMonth: number, totalUnits: n
 export const sampleScenario: Scenario = {
   id: "sample-project", name: "商业综合体基准方案", updatedAt: new Date().toISOString(),
   project: {
-    name: "城市商业综合体项目", location: "示例城市核心区", landArea: 22550,
+    name: "城市商业综合体项目", location: "示例城市核心区", landArea: 22550, landTotalPrice: 20000,
     totalBuildingArea: 90200, saleableArea: 18240, heldArea: 53940, governmentArea: 18020,
     vatRate: 0.15, managementRate: 0.02, salesRate: 0.05, shareholderInterestRate: 0.08, deliveryMonth: 24, trialOperationMonths: 3,
     hotelAverageDailyRate: 800, fourStarHotelAverageDailyRate: 600, fiveStarHotelAverageDailyRate: 900,

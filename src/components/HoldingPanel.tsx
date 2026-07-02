@@ -1,8 +1,9 @@
 "use client";
 import { AssetRow, CalculatedRow, HoldingReturn } from "@/types";
+import { isBasementOrParking } from "@/lib/calculationEngine";
 const fmt=(n:number)=>new Intl.NumberFormat("zh-CN",{maximumFractionDigits:1}).format(n||0);
 export function HoldingPanel({ rows, include, setInclude, updateRow }: { rows:CalculatedRow[];include:boolean;setInclude:(value:boolean)=>void;updateRow:(id:string,patch:Partial<AssetRow>)=>void }) {
-  const held=rows.filter(r=>r.kind.startsWith("自持")||r.kind==="其他自持");
+  const held=rows.filter(r=>!isBasementOrParking(r)&&(r.kind.startsWith("自持")||r.kind==="其他自持"));
   const columns=[
     ["业态","w-[125px]"],["分类","w-[85px]"],["客房数","w-[70px]"],["年租金收入","w-[85px]"],
     ["年经营收入","w-[85px]"],["年经营成本","w-[85px]"],["年净现金流","w-[88px]"],["持有年限","w-[72px]"],

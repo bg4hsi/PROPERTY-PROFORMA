@@ -6,6 +6,8 @@ export interface ProjectInfo {
   name: string;
   location: string;
   landArea: number;
+  /** 无“给政府”业态时启用的土地总价，单位：万元。 */
+  landTotalPrice?: number;
   totalBuildingArea: number;
   saleableArea: number;
   heldArea: number;
@@ -111,6 +113,8 @@ export interface ProjectSummary {
   includeHoldingReturns: boolean;
   totalIncome: number;
   totalConstructionCost: number;
+  /** 土地总价模型计入的土地成本；政府模型下为 0。 */
+  landCost: number;
   managementFeeBase: number;
   managementFee: number;
   salesFee: number;

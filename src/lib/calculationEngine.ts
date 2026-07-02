@@ -3,6 +3,11 @@ import { AllocationRule, AssetKind, AssetRow, CalculatedRow, ProjectInfo, Projec
 const safe = (n: number) => (Number.isFinite(n) ? n : 0);
 const round = (n: number) => Math.round((safe(n) + Number.EPSILON) * 10000) / 10000;
 
+/** 地库、地下空间、车位和停车业态均不参与土地分摊及自持经营回报。 */
+export function isBasementOrParking(row: Pick<AssetRow, "name">): boolean {
+  return /地库|地下(?:车库|室)?|车位|停车/i.test(row.name);
+}
+
 export function normalizeAssetKind(row: Pick<AssetRow, "kind"|"name">): AssetKind {
   const kind = String(row.kind);
   if (["销售","给政府","自持酒店","自持商业","其他自持"].includes(kind)) return kind as AssetKind;
@@ -41,8 +46,14 @@ export function calculateRows(rows: AssetRow[], project: ProjectInfo, _allocatio
     return { ...row, kind, efficiencyRate, saleArea, governmentArea };
   });
   const revenues = new Map(normalizedRows.map(row => [row.id, round(row.saleArea * row.salePrice / 10000)]));
+  const governmentMode = normalizedRows.some(row => row.kind === "给政府");
   const governmentCostPool = round(normalizedRows.reduce((total, row) => total + (row.kind === "给政府" ? row.buildingArea * row.unitCost / 10000 : 0), 0));
   const saleableBuildingArea = normalizedRows.reduce((total, row) => total + (row.kind === "销售" ? row.buildingArea : 0), 0);
+  const landTotalPrice = Math.max(0, project.landTotalPrice ?? 0);
+  const landAllocationBasis = new Map(normalizedRows.map(row => [row.id,
+    isBasementOrParking(row) ? 0 : row.kind === "销售" ? row.saleArea : row.kind !== "给政府" ? row.buildingArea : 0
+  ]));
+  const totalLandAllocationBasis = [...landAllocationBasis.values()].reduce((total, value) => total + value, 0);
 
   return normalizedRows.map(row => {
     const revenue = revenues.get(row.id) || 0;
@@ -53,8 +64,12 @@ export function calculateRows(rows: AssetRow[], project: ProjectInfo, _allocatio
     const saleAndHoldCost = round(Math.max(0, row.buildingArea - row.governmentArea) * row.unitCost / 10000);
     const totalConstructionCost = round(saleAndHoldCost + governmentConstructionCost + secondaryAllocation);
     const isSaleable = row.saleArea > 0;
-    const allocatedLandCost = row.kind === "销售" && saleableBuildingArea > 0 ? round(governmentCostPool * row.buildingArea / saleableBuildingArea) : 0;
-    const allocatedLandUnitCost = row.saleArea > 0 ? round(allocatedLandCost * 10000 / row.saleArea) : 0;
+    // 政府模型保持原有“销售面积折算单方”的口径；地库排除规则仅作用于土地总价模型。
+    const rowLandBasis = governmentMode ? row.saleArea : (landAllocationBasis.get(row.id) || 0);
+    const allocatedLandCost = governmentMode
+      ? row.kind === "销售" && saleableBuildingArea > 0 ? round(governmentCostPool * row.buildingArea / saleableBuildingArea) : 0
+      : totalLandAllocationBasis > 0 ? round(landTotalPrice * rowLandBasis / totalLandAllocationBasis) : 0;
+    const allocatedLandUnitCost = rowLandBasis > 0 ? round(allocatedLandCost * 10000 / rowLandBasis) : 0;
     const managementBase = isSaleable ? revenue : totalConstructionCost;
     const managementFee = round(row.manualManagementFee ?? managementBase * project.managementRate);
     const salesFee = isSaleable ? round(row.manualSalesFee ?? revenue * project.salesRate) : 0;
@@ -64,9 +79,10 @@ export function calculateRows(rows: AssetRow[], project: ProjectInfo, _allocatio
     const netProfit = isSaleable ? round(revenue - totalConstructionCost - allocatedLandCost - managementFee - salesFee - vat) : 0;
     const fullUnitCost = row.buildingArea ? round((totalConstructionCost + allocatedLandCost + managementFee + salesFee) * 10000 / row.buildingArea) : 0;
     const unitProfit = isSaleable && row.saleArea > 0 ? round(netProfit * 10000 / row.saleArea) : 0;
-    const isHotel = row.kind === "自持酒店";
-    const isCommercial = row.kind === "自持商业";
-    const isOtherHolding = row.kind === "其他自持";
+    const eligibleForHoldingReturn = !isBasementOrParking(row);
+    const isHotel = eligibleForHoldingReturn && row.kind === "自持酒店";
+    const isCommercial = eligibleForHoldingReturn && row.kind === "自持商业";
+    const isOtherHolding = eligibleForHoldingReturn && row.kind === "其他自持";
     const holdingBase = (isHotel || isCommercial || isOtherHolding) ? (row.holding || { annualRent: 0, annualOperatingIncome: 0, annualOperatingCost: 0, holdingYears: 10, discountRate: .08 }) : undefined;
     const roomCount = holdingBase?.roomCount || Math.max(1, Math.round(row.buildingArea / 50));
     const isFiveStarHotel = /五星|5\s*星/i.test(row.name);
@@ -81,9 +97,10 @@ export function calculateRows(rows: AssetRow[], project: ProjectInfo, _allocatio
     } : undefined;
     const holding = holdingIncome ? { ...holdingIncome, annualOperatingCost: round((holdingIncome.annualRent + holdingIncome.annualOperatingIncome) * (project.annualOperatingCostRate ?? .35)) } : undefined;
     const annualNetCashFlow = holding ? round(holding.annualRent + holding.annualOperatingIncome - holding.annualOperatingCost) : 0;
-    const paybackPeriod = holding && annualNetCashFlow > 0 ? round(totalConstructionCost / annualNetCashFlow) : null;
+    const holdingInvestmentCost = round(totalConstructionCost + (governmentMode ? 0 : allocatedLandCost));
+    const paybackPeriod = holding && annualNetCashFlow > 0 ? round(holdingInvestmentCost / annualNetCashFlow) : null;
     const cumulativeReturn = holding ? round(annualNetCashFlow * holding.holdingYears) : 0;
-    const cashflows = holding ? [-totalConstructionCost, ...Array(holding.holdingYears).fill(annualNetCashFlow)] : [];
+    const cashflows = holding ? [-holdingInvestmentCost, ...Array(holding.holdingYears).fill(annualNetCashFlow)] : [];
     return { ...row, holding, revenue, baseConstructionCost, governmentConstructionCost, secondaryAllocation,
       totalConstructionCost, allocatedLandCost, allocatedLandUnitCost, managementFee, salesFee, vat, shareholderInterest, netProfit, fullUnitCost, unitProfit, annualNetCashFlow, paybackPeriod,
       cumulativeReturn, npv: holding ? round(npv(holding.discountRate, cashflows)) : 0,
@@ -93,24 +110,26 @@ export function calculateRows(rows: AssetRow[], project: ProjectInfo, _allocatio
 
 export function calculateSummary(rows: CalculatedRow[], project: ProjectInfo): ProjectSummary {
   const sum = (key: keyof CalculatedRow) => rows.reduce((total, row) => total + (typeof row[key] === "number" ? row[key] as number : 0), 0);
-  const holdingRows = rows.filter(row => row.kind === "自持酒店" || row.kind === "自持商业" || row.kind === "其他自持");
+  const governmentMode = rows.some(row => row.kind === "给政府");
+  const holdingRows = rows.filter(row => !isBasementOrParking(row) && (row.kind === "自持酒店" || row.kind === "自持商业" || row.kind === "其他自持"));
   const revenue = round(sum("revenue"));
   const holdingReturns = round(sum("cumulativeReturn"));
   const holdingAnnualNetCashFlow = round(holdingRows.reduce((total, row) => total + row.annualNetCashFlow, 0));
   const totalConstructionCost = round(sum("totalConstructionCost"));
+  const landCost = governmentMode ? 0 : round(Math.max(0, project.landTotalPrice ?? 0));
   const managementFeeBase = round(rows.reduce((total, row) => total + (row.saleArea > 0 ? row.revenue : row.totalConstructionCost), 0));
   const managementFee = round(sum("managementFee"));
   const salesFee = round(sum("salesFee"));
   const vat = round(sum("vat"));
   const shareholderInterest = round(sum("shareholderInterest"));
-  const totalCost = round(totalConstructionCost + managementFee + salesFee + vat + shareholderInterest);
+  const totalCost = round(totalConstructionCost + landCost + managementFee + salesFee + vat + shareholderInterest);
   const totalIncome = round(revenue + (project.includeHoldingReturns ? holdingReturns : 0));
   const netProfitExcludingHoldingReturns = round(revenue - totalCost);
   const netProfitIncludingHoldingReturns = round(revenue + holdingReturns - totalCost);
   const netProfit = project.includeHoldingReturns ? netProfitIncludingHoldingReturns : netProfitExcludingHoldingReturns;
   const governmentArea = round(sum("governmentArea"));
   return { revenue, holdingReturns, holdingAnnualNetCashFlow, includeHoldingReturns: project.includeHoldingReturns,
-    totalIncome, totalConstructionCost, managementFeeBase, managementFee, salesFee, vat, shareholderInterest,
+    totalIncome, totalConstructionCost, landCost, managementFeeBase, managementFee, salesFee, vat, shareholderInterest,
     totalCost, netProfit, roi: totalCost ? netProfit / totalCost : 0,
     netProfitExcludingHoldingReturns, netProfitIncludingHoldingReturns,
     roiExcludingHoldingReturns: totalCost ? netProfitExcludingHoldingReturns / totalCost : 0,
@@ -234,7 +253,7 @@ export function calculateSimulationSummary(base: ProjectSummary, rates: Simulati
   const managementFee = round(base.managementFeeBase * rates.managementRate);
   const salesFee = round(base.revenue * rates.salesRate);
   const vat = round(rates.vatRate > 0 ? base.revenue / (1 + rates.vatRate) * rates.vatRate : 0);
-  const preTaxCost = round(base.totalConstructionCost + managementFee + salesFee + vat + base.shareholderInterest);
+  const preTaxCost = round(base.totalConstructionCost + base.landCost + managementFee + salesFee + vat + base.shareholderInterest);
   const profitBeforeTax = round(base.totalIncome - preTaxCost);
   const totalCost = preTaxCost;
   const netProfitExcludingHoldingReturns = round(base.revenue - totalCost);
@@ -274,7 +293,7 @@ export function calculateCashFlowProjection(summary: ProjectSummary, months = 36
   const effectiveSalesFeeRate = summary.revenue ? summary.salesFee / summary.revenue : 0;
   const effectiveVatRate = summary.revenue ? summary.vat / summary.revenue : 0;
   // 股东计息是利润测算项，不作为实际现金支出进入资金动态曲线。
-  const residualCost = Math.max(0, summary.totalCost - summary.totalConstructionCost - summary.managementFee - summary.salesFee - summary.vat - summary.shareholderInterest);
+  const residualCost = Math.max(0, summary.totalCost - summary.totalConstructionCost - summary.landCost - summary.managementFee - summary.salesFee - summary.vat - summary.shareholderInterest);
   const managementMonths = constructionEndMonth;
   const operationStartMonth = Math.max(1, Math.round(deliveryMonth) + Math.max(0, Math.round(trialOperationMonths)) + 1);
   const monthlyHoldingCashFlow = summary.includeHoldingReturns ? summary.holdingAnnualNetCashFlow / 12 : 0;
@@ -292,7 +311,8 @@ export function calculateCashFlowProjection(summary: ProjectSummary, months = 36
     const managementOutflow = i < managementMonths ? summary.managementFee / managementMonths : 0;
     const salesOutflow = monthlySales * effectiveSalesFeeRate;
     const vatOutflow = monthlySales * effectiveVatRate;
-    const monthlyOutflow = round(constructionOutflow + managementOutflow + salesOutflow + vatOutflow + (i === months - 1 ? residualCost : 0));
+    const landOutflow = i === 0 ? summary.landCost : 0;
+    const monthlyOutflow = round(landOutflow + constructionOutflow + managementOutflow + salesOutflow + vatOutflow + (i === months - 1 ? residualCost : 0));
     cumulativeSales += monthlySales;
     cumulativeCollection += monthlyCollection;
     cumulativeOutflow += monthlyOutflow;
