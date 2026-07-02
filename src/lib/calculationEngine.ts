@@ -54,6 +54,7 @@ export function calculateRows(rows: AssetRow[], project: ProjectInfo, _allocatio
     const totalConstructionCost = round(saleAndHoldCost + governmentConstructionCost + secondaryAllocation);
     const isSaleable = row.saleArea > 0;
     const allocatedLandCost = row.kind === "销售" && saleableBuildingArea > 0 ? round(governmentCostPool * row.buildingArea / saleableBuildingArea) : 0;
+    const allocatedLandUnitCost = row.buildingArea > 0 ? round(allocatedLandCost * 10000 / row.buildingArea) : 0;
     const managementBase = isSaleable ? revenue : totalConstructionCost;
     const managementFee = round(row.manualManagementFee ?? managementBase * project.managementRate);
     const salesFee = isSaleable ? round(row.manualSalesFee ?? revenue * project.salesRate) : 0;
@@ -76,7 +77,7 @@ export function calculateRows(rows: AssetRow[], project: ProjectInfo, _allocatio
     const cumulativeReturn = holding ? round(annualNetCashFlow * holding.holdingYears) : 0;
     const cashflows = holding ? [-totalConstructionCost, ...Array(holding.holdingYears).fill(annualNetCashFlow)] : [];
     return { ...row, holding, revenue, baseConstructionCost, governmentConstructionCost, secondaryAllocation,
-      totalConstructionCost, allocatedLandCost, managementFee, salesFee, vat, netProfit, fullUnitCost, annualNetCashFlow, paybackPeriod,
+      totalConstructionCost, allocatedLandCost, allocatedLandUnitCost, managementFee, salesFee, vat, netProfit, fullUnitCost, annualNetCashFlow, paybackPeriod,
       cumulativeReturn, npv: holding ? round(npv(holding.discountRate, cashflows)) : 0,
       irr: holding ? irr(cashflows) : null };
   });
