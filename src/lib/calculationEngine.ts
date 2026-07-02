@@ -92,11 +92,16 @@ export function calculateSummary(rows: CalculatedRow[], project: ProjectInfo): P
   const vat = round(sum("vat"));
   const totalCost = round(totalConstructionCost + managementFee + salesFee + vat);
   const totalIncome = round(revenue + (project.includeHoldingReturns ? holdingReturns : 0));
-  const netProfit = round(totalIncome - totalCost);
+  const netProfitExcludingHoldingReturns = round(revenue - totalCost);
+  const netProfitIncludingHoldingReturns = round(revenue + holdingReturns - totalCost);
+  const netProfit = project.includeHoldingReturns ? netProfitIncludingHoldingReturns : netProfitExcludingHoldingReturns;
   const governmentArea = round(sum("governmentArea"));
   return { revenue, holdingReturns, holdingAnnualNetCashFlow, includeHoldingReturns: project.includeHoldingReturns,
     totalIncome, totalConstructionCost, managementFeeBase, managementFee, salesFee, vat,
-    totalCost, netProfit, roi: totalCost ? netProfit / totalCost : 0, governmentArea,
+    totalCost, netProfit, roi: totalCost ? netProfit / totalCost : 0,
+    netProfitExcludingHoldingReturns, netProfitIncludingHoldingReturns,
+    roiExcludingHoldingReturns: totalCost ? netProfitExcludingHoldingReturns / totalCost : 0,
+    roiIncludingHoldingReturns: totalCost ? netProfitIncludingHoldingReturns / totalCost : 0, governmentArea,
     governmentRatio: project.totalBuildingArea ? governmentArea / project.totalBuildingArea : 0,
     governmentCost: round(sum("governmentConstructionCost")) };
 }
@@ -199,12 +204,17 @@ export function calculateSimulationSummary(base: ProjectSummary, rates: Simulati
   const preTaxCost = round(base.totalConstructionCost + managementFee + salesFee + vat);
   const profitBeforeTax = round(base.totalIncome - preTaxCost);
   const totalCost = preTaxCost;
-  const netProfit = round(base.totalIncome - totalCost);
+  const netProfitExcludingHoldingReturns = round(base.revenue - totalCost);
+  const netProfitIncludingHoldingReturns = round(base.revenue + base.holdingReturns - totalCost);
+  const netProfit = base.includeHoldingReturns ? netProfitIncludingHoldingReturns : netProfitExcludingHoldingReturns;
   return {
     profitBeforeTax,
     summary: {
       ...base, managementFee, salesFee, vat, totalCost, netProfit,
-      roi: totalCost ? netProfit / totalCost : 0
+      roi: totalCost ? netProfit / totalCost : 0,
+      netProfitExcludingHoldingReturns, netProfitIncludingHoldingReturns,
+      roiExcludingHoldingReturns: totalCost ? netProfitExcludingHoldingReturns / totalCost : 0,
+      roiIncludingHoldingReturns: totalCost ? netProfitIncludingHoldingReturns / totalCost : 0
     } satisfies ProjectSummary
   };
 }

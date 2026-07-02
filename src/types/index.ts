@@ -110,6 +110,10 @@ export interface ProjectSummary {
   totalCost: number;
   netProfit: number;
   roi: number;
+  netProfitExcludingHoldingReturns: number;
+  netProfitIncludingHoldingReturns: number;
+  roiExcludingHoldingReturns: number;
+  roiIncludingHoldingReturns: number;
   governmentArea: number;
   governmentRatio: number;
   governmentCost: number;
