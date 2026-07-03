@@ -6,6 +6,16 @@
 * { box-sizing: border-box; }
 body { margin: 0; background: #f4f7f9; color: #102a43; font-family: Inter, "PingFang SC", "Microsoft YaHei", sans-serif; }
 button, input, select { font: inherit; }
+/* 隐藏数字输入框的浏览器原生增减按钮，保留键盘输入能力。 */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  margin: 0;
+  -webkit-appearance: none;
+}
+input[type="number"] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
 .card { @apply rounded-2xl border border-slate-200 bg-white shadow-sm; }
 .btn { @apply inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-teal-300 hover:text-teal-700 disabled:cursor-not-allowed disabled:opacity-40; }
 .btn-primary { @apply border-teal-700 bg-teal-700 text-white hover:bg-teal-800 hover:text-white; }
