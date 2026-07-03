@@ -1,7 +1,7 @@
 "use client";
 import { AssetRow, CalculatedRow, HoldingReturn } from "@/types";
 import { isBasementOrParking } from "@/lib/calculationEngine";
-const fmt=(n:number)=>new Intl.NumberFormat("zh-CN",{maximumFractionDigits:1}).format(n||0);
+const fmt=(n:number)=>new Intl.NumberFormat("zh-CN",{maximumFractionDigits:0}).format(n||0);
 export function HoldingPanel({ rows, include, setInclude, updateRow }: { rows:CalculatedRow[];include:boolean;setInclude:(value:boolean)=>void;updateRow:(id:string,patch:Partial<AssetRow>)=>void }) {
   const held=rows.filter(r=>!isBasementOrParking(r)&&(r.kind.startsWith("自持")||r.kind==="其他自持"));
   const columns=[
