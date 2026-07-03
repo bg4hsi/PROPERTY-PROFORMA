@@ -1,6 +1,7 @@
 "use client";
 import { Settings2 } from "lucide-react";
 import { ProjectInfo } from "@/types";
+import { PROJECTION_MONTHS } from "@/lib/calculationEngine";
 
 export function ProjectSettings({ project, landModel, updateProject }: {
   project: ProjectInfo;
@@ -16,7 +17,7 @@ export function ProjectSettings({ project, landModel, updateProject }: {
         {rateField("股东计息利率","shareholderInterestRate")}
         {landModel&&<label><span className="label">土地总价（万元）</span><input aria-label="土地总价" className="field h-11" type="number" min="0" value={project.landTotalPrice ?? 0} onChange={e=>updateProject({landTotalPrice:Number(e.target.value)})}/></label>}
         {landModel&&<label><span className="label">土地面积（㎡）</span><input aria-label="土地面积" className="field h-11" type="number" min="0" value={project.landArea ?? 0} onChange={e=>updateProject({landArea:Number(e.target.value)})}/></label>}
-        <label><span className="label">交付月</span><input aria-label="项目交付月" className="field h-11" type="number" min="1" max="36" value={deliveryMonth} onChange={e=>updateProject({deliveryMonth:Math.max(1,Math.min(36,Number(e.target.value)))})}/></label>
+        <label><span className="label">交付月</span><input aria-label="项目交付月" className="field h-11" type="number" min="1" max={PROJECTION_MONTHS} value={deliveryMonth} onChange={e=>updateProject({deliveryMonth:Math.max(1,Math.min(PROJECTION_MONTHS,Number(e.target.value)))})}/></label>
         <label><span className="label">试营业（月）</span><input aria-label="试营业月数" className="field h-11" type="number" min="0" max="120" value={trialOperationMonths} onChange={e=>updateProject({trialOperationMonths:Math.max(0,Math.min(120,Number(e.target.value)))})}/></label>
         {rateField("年经营成本占比","annualOperatingCostRate")}
         <label><span className="label">四星级酒店单客房平均每晚房价（元）</span><input className="field h-11" type="number" min="0" value={project.fourStarHotelAverageDailyRate ?? project.hotelAverageDailyRate ?? 600} onChange={e=>updateProject({fourStarHotelAverageDailyRate:Number(e.target.value)})}/></label>

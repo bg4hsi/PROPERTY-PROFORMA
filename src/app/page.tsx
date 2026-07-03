@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Activity, BarChart3, Building2, ChevronDown, CircleDollarSign, Copy, Download, Eye, FolderPlus, Landmark, MapPin, Menu, PanelLeftClose, PanelLeftOpen, Pencil, Printer, Trash2, Upload, WalletCards, X } from "lucide-react";
 import { useProjectStore } from "@/store/useProjectStore";
-import { calculateCashFlowProjection, calculateCollectionSchedule, calculateProject, calculateSimulationSummary } from "@/lib/calculationEngine";
+import { calculateCashFlowProjection, calculateCollectionSchedule, calculateProject, calculateSimulationSummary, PROJECTION_MONTHS } from "@/lib/calculationEngine";
 import { exportExcel, importExcel } from "@/lib/excel";
 import { MetricCard } from "@/components/MetricCard";
 import { EditableTable } from "@/components/EditableTable";
@@ -16,10 +16,10 @@ export default function Home() {
   const store=useProjectStore(); const scenario=store.active(); const [mounted,setMounted]=useState(false); const [sidebar,setSidebar]=useState(false); const [sidebarHidden,setSidebarHidden]=useState(false); const [cashFlowCutoff,setCashFlowCutoff]=useState(17); const [pageViews,setPageViews]=useState<number|null>(null); const fileRef=useRef<HTMLInputElement>(null); const visitRecorded=useRef(false);
   useEffect(()=>{setMounted(true);if(visitRecorded.current)return;visitRecorded.current=true;fetch("/api/page-views",{method:"POST",cache:"no-store"}).then(response=>{if(!response.ok)throw new Error("访问次数读取失败");return response.json() as Promise<{count:number}>;}).then(data=>setPageViews(data.count)).catch(()=>setPageViews(null));},[]);
   const result=useMemo(()=>calculateProject(scenario.rows,scenario.project,[]),[scenario.rows,scenario.project]);
-  const collectionSchedule=useMemo(()=>calculateCollectionSchedule(result.rows,36),[result.rows]);
+  const collectionSchedule=useMemo(()=>calculateCollectionSchedule(result.rows,PROJECTION_MONTHS),[result.rows]);
   const simulationSummary=useMemo(()=>calculateSimulationSummary(result.summary,{managementRate:scenario.project.managementRate,salesRate:scenario.project.salesRate,vatRate:scenario.project.vatRate}).summary,[result.summary,scenario.project.managementRate,scenario.project.salesRate,scenario.project.vatRate]);
-  const cashFlowProjection=useMemo(()=>calculateCashFlowProjection(simulationSummary,36,collectionSchedule,scenario.project.deliveryMonth||24,scenario.project.trialOperationMonths??3),[simulationSummary,collectionSchedule,scenario.project.deliveryMonth,scenario.project.trialOperationMonths]);
-  const constructionFunding=useMemo(()=>{const delivery=Math.max(1,Math.min(36,Math.round(scenario.project.deliveryMonth||24)));const points=cashFlowProjection.slice(0,delivery);const peak=points.reduce((lowest,point)=>point.cumulativeNetCashFlow<lowest.cumulativeNetCashFlow?point:lowest,points[0]);return {amount:Math.max(0,-(peak?.cumulativeNetCashFlow||0)),month:peak?.month||1,delivery};},[cashFlowProjection,scenario.project.deliveryMonth]);
+  const cashFlowProjection=useMemo(()=>calculateCashFlowProjection(simulationSummary,PROJECTION_MONTHS,collectionSchedule,scenario.project.deliveryMonth||24,scenario.project.trialOperationMonths??3),[simulationSummary,collectionSchedule,scenario.project.deliveryMonth,scenario.project.trialOperationMonths]);
+  const constructionFunding=useMemo(()=>{const delivery=Math.max(1,Math.min(PROJECTION_MONTHS,Math.round(scenario.project.deliveryMonth||24)));const points=cashFlowProjection.slice(0,delivery);const peak=points.reduce((lowest,point)=>point.cumulativeNetCashFlow<lowest.cumulativeNetCashFlow?point:lowest,points[0]);return {amount:Math.max(0,-(peak?.cumulativeNetCashFlow||0)),month:peak?.month||1,delivery};},[cashFlowProjection,scenario.project.deliveryMonth]);
   if(!mounted) return <div className="flex min-h-screen items-center justify-center text-sm text-slate-500">正在打开测算工作台…</div>;
   const money=(n:number)=>`${number(n,0)} 万元`;
   const governmentMode=result.rows.some(row=>row.kind==="给政府");

@@ -2,6 +2,7 @@ import { AllocationRule, AssetKind, AssetRow, CalculatedRow, ProjectInfo, Projec
 
 const safe = (n: number) => (Number.isFinite(n) ? n : 0);
 const round = (n: number) => Math.round((safe(n) + Number.EPSILON) * 10000) / 10000;
+export const PROJECTION_MONTHS = 60;
 
 /** 地库、地下空间、车位和停车业态均不参与土地分摊及自持经营回报。 */
 export function isBasementOrParking(row: Pick<AssetRow, "name">): boolean {
@@ -143,7 +144,7 @@ export function calculateSummary(rows: CalculatedRow[], project: ProjectInfo): P
 export function calculateProject(rows: AssetRow[], project: ProjectInfo, allocations: AllocationRule[]) {
   const baseRows = calculateRows(rows, project, allocations);
   const baseSummary = calculateSummary(baseRows, project);
-  const months = 36;
+  const months = PROJECTION_MONTHS;
   const collectionSchedule = calculateCollectionSchedule(baseRows, months);
   const cashFlow = calculateCashFlowProjection(baseSummary, months, collectionSchedule, project.deliveryMonth || 24, project.trialOperationMonths ?? 3);
   const monthlyRate = Math.max(0, project.shareholderInterestRate ?? .08) / 12;
@@ -207,7 +208,7 @@ export function defaultCollectionLogic(row: AssetRow) {
   return { firstSaleMonth: row.name.includes("商业") ? 6 : 1, deliveryMonth: 24, totalUnits, monthlyAbsorptionUnits: Math.max(1, Math.ceil(totalUnits / 18)), downPaymentRate: .3, monthlyCollectionRate: .05, tailInstallmentMonths: 3 };
 }
 
-export function calculateCollectionSchedule(rows: CalculatedRow[], months = 36): CollectionSchedule {
+export function calculateCollectionSchedule(rows: CalculatedRow[], months = PROJECTION_MONTHS): CollectionSchedule {
   const totalMonthlySales = Array(months).fill(0) as number[];
   const totalMonthlyCollection = Array(months).fill(0) as number[];
   const projections = rows.map(row => {
@@ -277,7 +278,7 @@ export function calculateSimulationSummary(base: ProjectSummary, rates: Simulati
  * 月度推演模型：销售与回款采用业态配置；建安支出按建设期分布。
  * 自持经营净现金流从交付并完成试营业后的下一个月开始进入项目现金流。
  */
-export function calculateCashFlowProjection(summary: ProjectSummary, months = 36, collectionSchedule?: CollectionSchedule, deliveryMonth = months, trialOperationMonths = 0): CashFlowPoint[] {
+export function calculateCashFlowProjection(summary: ProjectSummary, months = PROJECTION_MONTHS, collectionSchedule?: CollectionSchedule, deliveryMonth = months, trialOperationMonths = 0): CashFlowPoint[] {
   const bell = (month: number, start: number, end: number, center: number, spread: number) =>
     month < start || month > end ? 0 : Math.exp(-Math.pow(month - center, 2) / (2 * spread * spread));
   const normalize = (weights: number[]) => {

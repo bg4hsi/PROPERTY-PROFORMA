@@ -1,6 +1,6 @@
 "use client";
 import { useMemo, useState } from "react";
-import { CashFlowPoint, CollectionSchedule, calculateCashFlowProjection, calculateSimulationSummary } from "@/lib/calculationEngine";
+import { CashFlowPoint, CollectionSchedule, calculateCashFlowProjection, calculateSimulationSummary, PROJECTION_MONTHS } from "@/lib/calculationEngine";
 import { ProjectInfo, ProjectSummary } from "@/types";
 
 const money = (value: number) => new Intl.NumberFormat("zh-CN", { maximumFractionDigits: 0 }).format(value || 0);
@@ -10,7 +10,7 @@ const colors = {
 };
 
 export function CashFlowChart({ summary, project, collectionSchedule, cutoffMonth }: { summary: ProjectSummary; project: ProjectInfo; collectionSchedule: CollectionSchedule; cutoffMonth: number }) {
-  const months = 36;
+  const months = PROJECTION_MONTHS;
   const [hoveredMonth, setHoveredMonth] = useState<number|null>(null);
   const simulation = useMemo(() => calculateSimulationSummary(summary, { managementRate: project.managementRate, salesRate: project.salesRate, vatRate: project.vatRate }), [summary, project.managementRate, project.salesRate, project.vatRate]);
   const data = useMemo(() => calculateCashFlowProjection(simulation.summary, months, collectionSchedule, project.deliveryMonth || 24, project.trialOperationMonths ?? 3), [simulation.summary, collectionSchedule, project.deliveryMonth, project.trialOperationMonths]);
@@ -46,7 +46,7 @@ export function CashFlowChart({ summary, project, collectionSchedule, cutoffMont
       <div className="overflow-x-auto px-3 pb-4"><svg viewBox={`0 0 ${width} ${height}`} className="min-w-[900px] w-full" role="img" aria-label="项目全周期现金流量图" onMouseLeave={()=>setHoveredMonth(null)}>
         {ticks.map((ratio, i) => { const y = top + ratio * plotH; return <g key={i}><line x1={left} x2={width-right} y1={y} y2={y} stroke="#e5e7eb" strokeDasharray="5 6"/><text x={left-12} y={y+5} textAnchor="end" fill="#64748b" fontSize="13">{money(maxMonthly * (1-ratio))}</text><text x={width-right+13} y={y+5} fill="#64748b" fontSize="13">{money(maxCum-ratio*(maxCum-minCum))}</text></g>; })}
         <line x1={left} x2={width-right} y1={cumulativeY(0)} y2={cumulativeY(0)} stroke="#cbd5e1"/>
-        {data.map((d, i) => { const groupW = Math.max(5, plotW/data.length*.72), barW=groupW/3; return <g key={d.month} opacity={d.month>cutoffMonth?.42:1}><title>第{d.month}个月：销售 {money(d.monthlySales)}，回款及经营净流入 {money(d.monthlyCollection)}，支出 {money(d.monthlyOutflow)} 万元</title><rect x={x(i)-groupW/2} y={monthlyY(d.monthlySales)} width={barW} height={top+plotH-monthlyY(d.monthlySales)} rx="2" fill={colors.salesBar}/><rect x={x(i)-groupW/2+barW} y={monthlyY(d.monthlyCollection)} width={barW} height={top+plotH-monthlyY(d.monthlyCollection)} rx="2" fill={colors.collectionBar}/><rect x={x(i)-groupW/2+barW*2} y={monthlyY(d.monthlyOutflow)} width={barW} height={top+plotH-monthlyY(d.monthlyOutflow)} rx="2" fill={colors.outflowBar}/>{(d.month===2||d.month%4===0)&&<text x={x(i)} y={top+plotH+25} textAnchor="middle" fill="#64748b" fontSize="13">第{d.month}个月</text>}</g>; })}
+        {data.map((d, i) => { const groupW = Math.max(5, plotW/data.length*.72), barW=groupW/3; return <g key={d.month} opacity={d.month>cutoffMonth?.42:1}><title>第{d.month}个月：销售 {money(d.monthlySales)}，回款及经营净流入 {money(d.monthlyCollection)}，支出 {money(d.monthlyOutflow)} 万元</title><rect x={x(i)-groupW/2} y={monthlyY(d.monthlySales)} width={barW} height={top+plotH-monthlyY(d.monthlySales)} rx="2" fill={colors.salesBar}/><rect x={x(i)-groupW/2+barW} y={monthlyY(d.monthlyCollection)} width={barW} height={top+plotH-monthlyY(d.monthlyCollection)} rx="2" fill={colors.collectionBar}/><rect x={x(i)-groupW/2+barW*2} y={monthlyY(d.monthlyOutflow)} width={barW} height={top+plotH-monthlyY(d.monthlyOutflow)} rx="2" fill={colors.outflowBar}/>{d.month%6===0&&<text x={x(i)} y={top+plotH+25} textAnchor="middle" fill="#64748b" fontSize="13">第{d.month}个月</text>}</g>; })}
         <path d={line("cumulativeSales")} fill="none" stroke={colors.sales} strokeWidth="3"/><path d={line("cumulativeCollection")} fill="none" stroke={colors.collection} strokeWidth="3"/><path d={line("cumulativeOutflow")} fill="none" stroke={colors.outflow} strokeWidth="3"/><path d={line("cumulativeNetCashFlow")} fill="none" stroke={colors.net} strokeWidth="4"/>
         <line x1={x(cutoffMonth-1)} x2={x(cutoffMonth-1)} y1={top} y2={top+plotH} stroke="#1d4ed8" strokeWidth="2" strokeDasharray="6 5"/><text x={x(cutoffMonth-1)+7} y={top+16} fill="#1d4ed8" fontSize="13" fontWeight="700">第{cutoffMonth}月</text>
         {([["cumulativeSales",colors.sales],["cumulativeCollection",colors.collection],["cumulativeOutflow",colors.outflow],["cumulativeNetCashFlow",colors.net]] as Array<[keyof CashFlowPoint,string]>).map(([key,color])=><circle key={key} cx={x(cutoffMonth-1)} cy={cumulativeY(point[key] as number)} r="5" fill="white" stroke={color} strokeWidth="3"/>)}

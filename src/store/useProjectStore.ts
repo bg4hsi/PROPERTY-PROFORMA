@@ -3,7 +3,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { AllocationRule, AssetRow, ProjectInfo, Scenario } from "@/types";
 import { sampleScenario } from "@/lib/sampleData";
-import { defaultCollectionLogic, normalizeAssetKind } from "@/lib/calculationEngine";
+import { defaultCollectionLogic, normalizeAssetKind, PROJECTION_MONTHS } from "@/lib/calculationEngine";
 
 const uid = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 interface Store {
@@ -26,7 +26,7 @@ export const useProjectStore = create<Store>()(persist((set, get) => ({
   active: () => get().scenarios.find(s => s.id === get().activeId) || get().scenarios[0],
   updateProject: patch => set(state => updateActive(state, s => {
     if (patch.deliveryMonth === undefined) return { ...s, project: { ...s.project, ...patch } };
-    const deliveryMonth = Math.max(1, Math.min(36, Math.round(patch.deliveryMonth)));
+    const deliveryMonth = Math.max(1, Math.min(PROJECTION_MONTHS, Math.round(patch.deliveryMonth)));
     const rows = s.rows.map(row => normalizeAssetKind(row) === "销售"
       ? { ...row, collection: { ...defaultCollectionLogic(row), deliveryMonth } }
       : row);
