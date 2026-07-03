@@ -10,7 +10,7 @@ interface Store {
   active: () => Scenario;
   updateProject: (patch: Partial<ProjectInfo>) => void;
   updateRow: (id: string, patch: Partial<AssetRow>) => void;
-  addRow: () => void; duplicateRow: (id: string) => void; deleteRow: (id: string) => void;
+  addRow: () => void; duplicateRow: (id: string) => void; deleteRow: (id: string) => void; reorderRow: (sourceId: string, targetId: string) => void;
   addAllocation: (rule: Omit<AllocationRule, "id">) => void; deleteAllocation: (id: string) => void;
   createScenario: () => void; duplicateScenario: () => void; deleteScenario: () => void;
   renameScenario: (name: string) => void; setActive: (id: string) => void; replaceActive: (scenario: Scenario) => void;
@@ -28,6 +28,15 @@ export const useProjectStore = create<Store>()(persist((set, get) => ({
   addRow: () => set(state => updateActive(state, s => ({ ...s, rows: [...s.rows, { id: uid(), name: "新业态", kind: "销售", buildingArea: 0, governmentArea: 0, efficiencyRate: 0, saleArea: 0, salePrice: 0, unitCost: 0, manualManagementFee: null, manualSalesFee: null, manualSecondaryAllocation: 0, collection: { firstSaleMonth: 1, deliveryMonth: 24, totalUnits: 0, monthlyAbsorptionUnits: 0, downPaymentRate: .3, monthlyCollectionRate: .05, tailInstallmentMonths: 3 } }] }))),
   duplicateRow: id => set(state => updateActive(state, s => ({ ...s, rows: s.rows.flatMap(r => r.id === id ? [r, { ...r, id: uid(), name: `${r.name} 副本` }] : [r]) }))),
   deleteRow: id => set(state => updateActive(state, s => ({ ...s, rows: s.rows.filter(r => r.id !== id), allocations: s.allocations.filter(a => !a.sourceIds.includes(id) && !a.targetIds.includes(id)) }))),
+  reorderRow: (sourceId, targetId) => set(state => updateActive(state, s => {
+    const sourceIndex = s.rows.findIndex(row => row.id === sourceId);
+    const targetIndex = s.rows.findIndex(row => row.id === targetId);
+    if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) return s;
+    const rows = [...s.rows];
+    const [moved] = rows.splice(sourceIndex, 1);
+    rows.splice(targetIndex, 0, moved);
+    return { ...s, rows };
+  })),
   addAllocation: rule => set(state => updateActive(state, s => ({ ...s, allocations: [...s.allocations, { ...rule, id: uid() }] }))),
   deleteAllocation: id => set(state => updateActive(state, s => ({ ...s, allocations: s.allocations.filter(a => a.id !== id) }))),
   createScenario: () => set(state => { const next = { ...sampleScenario, id: uid(), name: "新测算方案", updatedAt: new Date().toISOString(), rows: sampleScenario.rows.map(r => ({ ...r, id: uid() })), allocations: [] }; return { scenarios: [...state.scenarios, next], activeId: next.id }; }),
