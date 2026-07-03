@@ -93,10 +93,11 @@ export function calculateRows(rows: AssetRow[], project: ProjectInfo, _allocatio
     const fourStarHotelRate = project.fourStarHotelAverageDailyRate ?? legacyHotelRate;
     const fiveStarHotelRate = project.fiveStarHotelAverageDailyRate ?? legacyHotelRate;
     const hotelAverageDailyRate = isFiveStarHotel ? fiveStarHotelRate : fourStarHotelRate;
+    const rentableArea = round(row.buildingArea * (row.efficiencyRate || 0));
     const holdingIncome = holdingBase ? {
       ...holdingBase,
       ...(isHotel ? { roomCount, annualRent: 0, annualOperatingIncome: round(roomCount * hotelAverageDailyRate * (project.hotelOccupancyRate ?? .7) * 365 / 10000) } : {}),
-      ...(isCommercial ? { annualRent: round(row.buildingArea * (project.commercialMonthlyRent ?? 150) * (project.commercialOccupancyRate ?? .85) * 12 / 10000), annualOperatingIncome: 0 } : {})
+      ...(isCommercial ? { annualRent: round(rentableArea * (project.commercialMonthlyRent ?? 150) * (project.commercialOccupancyRate ?? .85) * 12 / 10000), annualOperatingIncome: 0 } : {})
     } : undefined;
     const holding = holdingIncome ? { ...holdingIncome, annualOperatingCost: round((holdingIncome.annualRent + holdingIncome.annualOperatingIncome) * (project.annualOperatingCostRate ?? .35)) } : undefined;
     const annualNetCashFlow = holding ? round(holding.annualRent + holding.annualOperatingIncome - holding.annualOperatingCost) : 0;
