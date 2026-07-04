@@ -27,14 +27,14 @@ export default function Home() {
   if(!mounted) return <div className="flex min-h-screen items-center justify-center text-sm text-slate-500">正在打开测算工作台…</div>;
   const money=(n:number)=>`${number(n,0)} 万元`;
   const governmentMode=result.rows.some(row=>row.kind==="给政府");
-  const incomeByAsset=result.rows.map(row=>({name:row.name,value:row.revenue+(scenario.project.includeHoldingReturns?row.cumulativeReturn:0)})).filter(item=>Math.abs(item.value)>.0001);
-  const costByAsset=result.rows.map(row=>({name:row.name,value:row.totalConstructionCost+(governmentMode?0:row.allocatedLandCost)+row.openingCost+row.managementFee+row.salesFee+row.vat+row.shareholderInterest})).filter(item=>Math.abs(item.value)>.0001);
+  const incomeByAsset=result.rows.map(row=>({name:row.name,area:row.buildingArea,value:row.revenue+(scenario.project.includeHoldingReturns?row.cumulativeReturn:0)})).filter(item=>Math.abs(item.value)>.0001);
+  const costByAsset=result.rows.map(row=>({name:row.name,area:row.buildingArea,value:row.totalConstructionCost+(governmentMode?0:row.allocatedLandCost)+row.openingCost+row.managementFee+row.salesFee+row.vat+row.shareholderInterest})).filter(item=>Math.abs(item.value)>.0001);
   const totalBuildingArea=result.rows.reduce((total,row)=>total+row.buildingArea,0);
   const totalSaleArea=result.rows.reduce((total,row)=>total+row.saleArea,0);
   const totalHeldArea=result.rows.reduce((total,row)=>total+(["自持酒店","自持商业","其他自持"].includes(row.kind)?row.buildingArea:0),0);
   const landUnitPrice=scenario.project.landArea>0?(scenario.project.landTotalPrice??0)*10000/scenario.project.landArea:0;
   const landPricePerMu=scenario.project.landArea>0?(scenario.project.landTotalPrice??0)*666.6667/scenario.project.landArea:0;
-  const assetDetails=(items:{name:string;value:number}[])=><div className="max-h-40 space-y-1 overflow-y-auto pr-1 text-xs tabular-nums">{items.length?items.map((item,index)=><div key={`${item.name}-${index}`} className="flex items-center justify-between gap-3"><span className="truncate text-slate-500" title={item.name}>{item.name}</span><span className="shrink-0 font-medium text-slate-700">{money(item.value)}</span></div>):<div className="text-slate-400">暂无金额</div>}</div>;
+  const assetDetails=(items:{name:string;area:number;value:number}[])=><div className="max-h-40 space-y-1 overflow-y-auto pr-1 text-xs tabular-nums">{items.length?items.map((item,index)=><div key={`${item.name}-${index}`} className="flex items-center justify-between gap-3"><span className="min-w-0 truncate text-slate-500" title={`${item.name} · ${number(item.area)} ㎡`}>{item.name}<span className="ml-1 text-slate-400">· {number(item.area)} ㎡</span></span><span className="shrink-0 font-medium text-slate-700">{money(item.value)}</span></div>):<div className="text-slate-400">暂无金额</div>}</div>;
   const exportRows=result.rows.map(r=>({业态:r.name,类型:r.kind,建筑面积:r.buildingArea,...(governmentMode?{给政府面积:r.governmentArea}:{}),得房率:r.efficiencyRate,销售面积:r.saleArea,销售单价:r.salePrice,单方成本:r.unitCost,单方分摊地价:r.allocatedLandUnitCost,销售总额:r.revenue,建安成本合计:r.totalConstructionCost,开办费:r.openingCost,管理费用:r.managementFee,销售费用:r.salesFee,增值税:r.vat,股东计息:r.shareholderInterest,净利润:r.netProfit,单方成本含销管费:r.fullUnitCost,单方利润:r.unitProfit,十年累计回报:r.cumulativeReturn,投资回收期年:r.paybackPeriod,NPV:r.npv,IRR:r.irr}));
   const onImport=async(file?:File)=>{if(!file)return;try{store.replaceActive(await importExcel(file,scenario));}catch(e){alert(e instanceof Error?e.message:"导入失败");}if(fileRef.current)fileRef.current.value="";};
   return <div className="min-h-screen">
