@@ -308,6 +308,11 @@ export function calculateCashFlowProjection(summary: ProjectSummary, months = PR
   const managementMonths = constructionEndMonth;
   const operationStartMonth = Math.max(1, Math.round(deliveryMonth) + Math.max(0, Math.round(trialOperationMonths)) + 1);
   const monthlyHoldingCashFlow = summary.includeHoldingReturns ? summary.holdingAnnualNetCashFlow / 12 : 0;
+  const constructionPhaseMonths = constructionEndMonth;
+  const preDeliveryConstructionCost = round(summary.totalConstructionCost * .88);
+  const postDeliveryConstructionCost = round(summary.totalConstructionCost - preDeliveryConstructionCost);
+  const preDeliveryMonthlyCost = round(preDeliveryConstructionCost / constructionPhaseMonths);
+  const postDeliveryMonthlyCost = round(postDeliveryConstructionCost / 6);
   let cumulativeSales = 0, cumulativeCollection = 0, cumulativeOutflow = 0;
   return Array.from({ length: months }, (_, i) => {
     const monthlySales = round(collectionSchedule?.monthlySales[i] ?? summary.revenue * salesWeights[i]);
@@ -315,9 +320,13 @@ export function calculateCashFlowProjection(summary: ProjectSummary, months = PR
     const monthlyCollection = round((collectionSchedule?.monthlyCollection[i] ?? summary.revenue * collectionWeights[i]) + monthlyOperatingCashFlow);
     const month = i + 1;
     const constructionOutflow = month <= constructionEndMonth
-      ? summary.totalConstructionCost * .75 / constructionEndMonth
+      ? month === constructionEndMonth
+        ? round(preDeliveryConstructionCost - preDeliveryMonthlyCost * (constructionPhaseMonths - 1))
+        : preDeliveryMonthlyCost
       : month <= constructionEndMonth + 6
-        ? summary.totalConstructionCost * .25 / 6
+        ? month === constructionEndMonth + 6
+          ? round(postDeliveryConstructionCost - postDeliveryMonthlyCost * 5)
+          : postDeliveryMonthlyCost
         : 0;
     const openingCostOutflow = month === constructionEndMonth ? summary.openingCost : 0;
     const managementOutflow = i < managementMonths ? summary.managementFee / managementMonths : 0;
