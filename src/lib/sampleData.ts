@@ -16,6 +16,7 @@ export const sampleScenario: Scenario = {
     totalBuildingArea: 90200, saleableArea: 18240, heldArea: 53940, governmentArea: 18020,
     vatRate: 0.15, managementRate: 0.02, salesRate: 0.05, shareholderInterestRate: 0.08, deliveryMonth: 24, trialOperationMonths: 3,
     hotelAverageDailyRate: 800, fourStarHotelAverageDailyRate: 600, fiveStarHotelAverageDailyRate: 900,
+    fourStarHotelOpeningCost: 0, fiveStarHotelOpeningCost: 0,
     commercialMonthlyRent: 150, hotelOccupancyRate: .7, commercialOccupancyRate: .85,
     annualOperatingCostRate: .35,
     currencyUnit: "万元", includeHoldingReturns: false

@@ -22,6 +22,9 @@ export interface ProjectInfo {
   hotelAverageDailyRate?: number;
   fourStarHotelAverageDailyRate: number;
   fiveStarHotelAverageDailyRate: number;
+  /** 酒店及会展类开办费标准，单位：元/建筑平方米。 */
+  fourStarHotelOpeningCost?: number;
+  fiveStarHotelOpeningCost?: number;
   commercialMonthlyRent: number;
   hotelOccupancyRate: number;
   commercialOccupancyRate: number;
@@ -90,6 +93,7 @@ export interface CalculatedRow extends AssetRow {
   governmentConstructionCost: number;
   secondaryAllocation: number;
   totalConstructionCost: number;
+  openingCost: number;
   allocatedLandCost: number;
   allocatedLandUnitCost: number;
   managementFee: number;
@@ -113,6 +117,7 @@ export interface ProjectSummary {
   includeHoldingReturns: boolean;
   totalIncome: number;
   totalConstructionCost: number;
+  openingCost: number;
   /** 土地总价模型计入的土地成本；政府模型下为 0。 */
   landCost: number;
   managementFeeBase: number;

@@ -16,7 +16,7 @@ export function HoldingPanel({ rows, include, setInclude, updateRow }: { rows:Ca
     annualOperatingCost:sum.annualOperatingCost+(row.holding?.annualOperatingCost||0),
     annualNetCashFlow:sum.annualNetCashFlow+row.annualNetCashFlow,
     cumulativeReturn:sum.cumulativeReturn+row.cumulativeReturn,
-    investmentCost:sum.investmentCost+row.totalConstructionCost+row.allocatedLandCost,
+    investmentCost:sum.investmentCost+row.totalConstructionCost+row.allocatedLandCost+row.openingCost,
     npv:sum.npv+row.npv
   }),{roomCount:0,annualRent:0,annualOperatingIncome:0,annualOperatingCost:0,annualNetCashFlow:0,cumulativeReturn:0,investmentCost:0,npv:0});
   const totalPaybackPeriod=totals.annualNetCashFlow>0?totals.investmentCost/totals.annualNetCashFlow:null;

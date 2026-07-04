@@ -65,6 +65,12 @@ export function calculateRows(rows: AssetRow[], project: ProjectInfo, _allocatio
     // 建筑面积已包含政府面积时，基础成本中扣除政府面积，避免重复计算。
     const saleAndHoldCost = round(Math.max(0, row.buildingArea - row.governmentArea) * row.unitCost / 10000);
     const totalConstructionCost = round(saleAndHoldCost + governmentConstructionCost + secondaryAllocation);
+    const isHotelAsset = row.kind === "自持酒店" || /酒店/.test(row.name);
+    const usesFiveStarOpeningCost = /五星|5\s*星/i.test(row.name) || /会展|会议|展览|会务/.test(row.name);
+    const openingCostRate = usesFiveStarOpeningCost
+      ? (project.fiveStarHotelOpeningCost ?? 0)
+      : isHotelAsset ? (project.fourStarHotelOpeningCost ?? 0) : 0;
+    const openingCost = round(row.buildingArea * openingCostRate / 10000);
     const isSaleable = row.saleArea > 0;
     const rowLandAllocationBasis = landAllocationBasis.get(row.id) || 0;
     const allocatedLandCost = governmentMode
@@ -79,8 +85,8 @@ export function calculateRows(rows: AssetRow[], project: ProjectInfo, _allocatio
     const vat = round(project.vatRate > 0 ? revenue / (1 + project.vatRate) * project.vatRate : 0);
     // 股东计息依赖项目逐月资金缺口，在 calculateProject 中统一计算后再分摊到各业态。
     const shareholderInterest = 0;
-    const netProfit = isSaleable ? round(revenue - totalConstructionCost - allocatedLandCost - managementFee - salesFee - vat) : 0;
-    const fullUnitCost = row.buildingArea ? round((totalConstructionCost + allocatedLandCost + managementFee + salesFee) * 10000 / row.buildingArea) : 0;
+    const netProfit = isSaleable ? round(revenue - totalConstructionCost - allocatedLandCost - openingCost - managementFee - salesFee - vat) : 0;
+    const fullUnitCost = row.buildingArea ? round((totalConstructionCost + allocatedLandCost + openingCost + managementFee + salesFee) * 10000 / row.buildingArea) : 0;
     const unitProfit = isSaleable && row.saleArea > 0 ? round(netProfit * 10000 / row.saleArea) : 0;
     const eligibleForHoldingReturn = !isBasementOrParking(row);
     const isHotel = eligibleForHoldingReturn && row.kind === "自持酒店";
@@ -101,12 +107,12 @@ export function calculateRows(rows: AssetRow[], project: ProjectInfo, _allocatio
     } : undefined;
     const holding = holdingIncome ? { ...holdingIncome, annualOperatingCost: round((holdingIncome.annualRent + holdingIncome.annualOperatingIncome) * (project.annualOperatingCostRate ?? .35)) } : undefined;
     const annualNetCashFlow = holding ? round(holding.annualRent + holding.annualOperatingIncome - holding.annualOperatingCost) : 0;
-    const holdingInvestmentCost = round(totalConstructionCost + (governmentMode ? 0 : allocatedLandCost));
+    const holdingInvestmentCost = round(totalConstructionCost + openingCost + (governmentMode ? 0 : allocatedLandCost));
     const paybackPeriod = holding && annualNetCashFlow > 0 ? round(holdingInvestmentCost / annualNetCashFlow) : null;
     const cumulativeReturn = holding ? round(annualNetCashFlow * holding.holdingYears) : 0;
     const cashflows = holding ? [-holdingInvestmentCost, ...Array(holding.holdingYears).fill(annualNetCashFlow)] : [];
     return { ...row, holding, revenue, baseConstructionCost, governmentConstructionCost, secondaryAllocation,
-      totalConstructionCost, allocatedLandCost, allocatedLandUnitCost, managementFee, salesFee, vat, shareholderInterest, netProfit, fullUnitCost, unitProfit, annualNetCashFlow, paybackPeriod,
+      totalConstructionCost, openingCost, allocatedLandCost, allocatedLandUnitCost, managementFee, salesFee, vat, shareholderInterest, netProfit, fullUnitCost, unitProfit, annualNetCashFlow, paybackPeriod,
       cumulativeReturn, npv: holding ? round(npv(holding.discountRate, cashflows)) : 0,
       irr: holding ? irr(cashflows) : null };
   });
@@ -120,26 +126,27 @@ export function calculateSummary(rows: CalculatedRow[], project: ProjectInfo): P
   const holdingReturns = round(sum("cumulativeReturn"));
   const holdingAnnualNetCashFlow = round(holdingRows.reduce((total, row) => total + row.annualNetCashFlow, 0));
   const totalConstructionCost = round(sum("totalConstructionCost"));
+  const openingCost = round(sum("openingCost"));
   const landCost = governmentMode ? 0 : round(Math.max(0, project.landTotalPrice ?? 0));
   const managementFeeBase = round(rows.reduce((total, row) => total + (row.saleArea > 0 ? row.revenue : row.totalConstructionCost), 0));
   const managementFee = round(sum("managementFee"));
   const salesFee = round(sum("salesFee"));
   const vat = round(sum("vat"));
   const shareholderInterest = round(sum("shareholderInterest"));
-  const totalCost = round(totalConstructionCost + landCost + managementFee + salesFee + vat + shareholderInterest);
+  const totalCost = round(totalConstructionCost + landCost + openingCost + managementFee + salesFee + vat + shareholderInterest);
   const totalIncome = round(revenue + (project.includeHoldingReturns ? holdingReturns : 0));
   const netProfitExcludingHoldingReturns = round(revenue - totalCost);
   const netProfitIncludingHoldingReturns = round(revenue + holdingReturns - totalCost);
   const netProfit = project.includeHoldingReturns ? netProfitIncludingHoldingReturns : netProfitExcludingHoldingReturns;
   const governmentArea = round(sum("governmentArea"));
   return { revenue, holdingReturns, holdingAnnualNetCashFlow, includeHoldingReturns: project.includeHoldingReturns,
-    totalIncome, totalConstructionCost, landCost, managementFeeBase, managementFee, salesFee, vat, shareholderInterest,
+    totalIncome, totalConstructionCost, openingCost, landCost, managementFeeBase, managementFee, salesFee, vat, shareholderInterest,
     totalCost, netProfit, roi: totalCost ? netProfit / totalCost : 0,
     netProfitExcludingHoldingReturns, netProfitIncludingHoldingReturns,
     roiExcludingHoldingReturns: totalCost ? netProfitExcludingHoldingReturns / totalCost : 0,
     roiIncludingHoldingReturns: totalCost ? netProfitIncludingHoldingReturns / totalCost : 0, governmentArea,
     governmentRatio: project.totalBuildingArea ? governmentArea / project.totalBuildingArea : 0,
-    governmentCost: round(sum("governmentConstructionCost")) };
+    governmentCost: round(rows.reduce((total,row)=>total+(row.kind==="给政府"?row.governmentConstructionCost+row.openingCost:0),0)) };
 }
 
 export function calculateProject(rows: AssetRow[], project: ProjectInfo, allocations: AllocationRule[]) {
@@ -257,7 +264,7 @@ export function calculateSimulationSummary(base: ProjectSummary, rates: Simulati
   const managementFee = round(base.managementFeeBase * rates.managementRate);
   const salesFee = round(base.revenue * rates.salesRate);
   const vat = round(rates.vatRate > 0 ? base.revenue / (1 + rates.vatRate) * rates.vatRate : 0);
-  const preTaxCost = round(base.totalConstructionCost + base.landCost + managementFee + salesFee + vat + base.shareholderInterest);
+  const preTaxCost = round(base.totalConstructionCost + base.landCost + base.openingCost + managementFee + salesFee + vat + base.shareholderInterest);
   const profitBeforeTax = round(base.totalIncome - preTaxCost);
   const totalCost = preTaxCost;
   const netProfitExcludingHoldingReturns = round(base.revenue - totalCost);
@@ -297,7 +304,7 @@ export function calculateCashFlowProjection(summary: ProjectSummary, months = PR
   const effectiveSalesFeeRate = summary.revenue ? summary.salesFee / summary.revenue : 0;
   const effectiveVatRate = summary.revenue ? summary.vat / summary.revenue : 0;
   // 股东计息是利润测算项，不作为实际现金支出进入资金动态曲线。
-  const residualCost = Math.max(0, summary.totalCost - summary.totalConstructionCost - summary.landCost - summary.managementFee - summary.salesFee - summary.vat - summary.shareholderInterest);
+  const residualCost = Math.max(0, summary.totalCost - summary.totalConstructionCost - summary.landCost - summary.openingCost - summary.managementFee - summary.salesFee - summary.vat - summary.shareholderInterest);
   const managementMonths = constructionEndMonth;
   const operationStartMonth = Math.max(1, Math.round(deliveryMonth) + Math.max(0, Math.round(trialOperationMonths)) + 1);
   const monthlyHoldingCashFlow = summary.includeHoldingReturns ? summary.holdingAnnualNetCashFlow / 12 : 0;
@@ -312,11 +319,12 @@ export function calculateCashFlowProjection(summary: ProjectSummary, months = PR
       : month <= constructionEndMonth + 6
         ? summary.totalConstructionCost * .25 / 6
         : 0;
+    const openingCostOutflow = month === constructionEndMonth ? summary.openingCost : 0;
     const managementOutflow = i < managementMonths ? summary.managementFee / managementMonths : 0;
     const salesOutflow = monthlySales * effectiveSalesFeeRate;
     const vatOutflow = monthlySales * effectiveVatRate;
     const landOutflow = i === 0 ? summary.landCost : 0;
-    const monthlyOutflow = round(landOutflow + constructionOutflow + managementOutflow + salesOutflow + vatOutflow + (i === months - 1 ? residualCost : 0));
+    const monthlyOutflow = round(landOutflow + constructionOutflow + openingCostOutflow + managementOutflow + salesOutflow + vatOutflow + (i === months - 1 ? residualCost : 0));
     cumulativeSales += monthlySales;
     cumulativeCollection += monthlyCollection;
     cumulativeOutflow += monthlyOutflow;
