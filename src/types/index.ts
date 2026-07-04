@@ -25,6 +25,7 @@ export interface ProjectInfo {
   /** 酒店及会展类开办费标准，单位：元/建筑平方米。 */
   fourStarHotelOpeningCost?: number;
   fiveStarHotelOpeningCost?: number;
+  mallOpeningCost?: number;
   commercialMonthlyRent: number;
   hotelOccupancyRate: number;
   commercialOccupancyRate: number;

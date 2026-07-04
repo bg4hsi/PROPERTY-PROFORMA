@@ -66,10 +66,13 @@ export function calculateRows(rows: AssetRow[], project: ProjectInfo, _allocatio
     const saleAndHoldCost = round(Math.max(0, row.buildingArea - row.governmentArea) * row.unitCost / 10000);
     const totalConstructionCost = round(saleAndHoldCost + governmentConstructionCost + secondaryAllocation);
     const isHotelAsset = row.kind === "自持酒店" || /酒店/.test(row.name);
+    const isMallAsset = /MALL|购物中心|商场/i.test(row.name);
     const usesFiveStarOpeningCost = /五星|5\s*星/i.test(row.name) || /会展|会议|展览|会务/.test(row.name);
     const openingCostRate = usesFiveStarOpeningCost
       ? (project.fiveStarHotelOpeningCost ?? 0)
-      : isHotelAsset ? (project.fourStarHotelOpeningCost ?? 0) : 0;
+      : isHotelAsset
+        ? (project.fourStarHotelOpeningCost ?? 0)
+        : isMallAsset ? (project.mallOpeningCost ?? 0) : 0;
     const openingCost = round(row.buildingArea * openingCostRate / 10000);
     const isSaleable = row.saleArea > 0;
     const rowLandAllocationBasis = landAllocationBasis.get(row.id) || 0;
