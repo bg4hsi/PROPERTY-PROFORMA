@@ -313,6 +313,10 @@ export function calculateCashFlowProjection(summary: ProjectSummary, months = PR
   const postDeliveryConstructionCost = round(summary.totalConstructionCost - preDeliveryConstructionCost);
   const preDeliveryMonthlyCost = round(preDeliveryConstructionCost / constructionPhaseMonths);
   const postDeliveryMonthlyCost = round(postDeliveryConstructionCost / 6);
+  const requestedOpeningCostMonths = Math.max(1, Math.round(trialOperationMonths) + 1);
+  const openingCostEndMonth = Math.min(months, constructionEndMonth + requestedOpeningCostMonths - 1);
+  const openingCostMonths = Math.max(1, openingCostEndMonth - constructionEndMonth + 1);
+  const openingCostMonthly = round(summary.openingCost / openingCostMonths);
   let cumulativeSales = 0, cumulativeCollection = 0, cumulativeOutflow = 0;
   return Array.from({ length: months }, (_, i) => {
     const monthlySales = round(collectionSchedule?.monthlySales[i] ?? summary.revenue * salesWeights[i]);
@@ -328,7 +332,11 @@ export function calculateCashFlowProjection(summary: ProjectSummary, months = PR
           ? round(postDeliveryConstructionCost - postDeliveryMonthlyCost * 5)
           : postDeliveryMonthlyCost
         : 0;
-    const openingCostOutflow = month === constructionEndMonth ? summary.openingCost : 0;
+    const openingCostOutflow = month >= constructionEndMonth && month <= openingCostEndMonth
+      ? month === openingCostEndMonth
+        ? round(summary.openingCost - openingCostMonthly * (openingCostMonths - 1))
+        : openingCostMonthly
+      : 0;
     const managementOutflow = i < managementMonths ? summary.managementFee / managementMonths : 0;
     const salesOutflow = monthlySales * effectiveSalesFeeRate;
     const vatOutflow = monthlySales * effectiveVatRate;
