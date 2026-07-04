@@ -10,6 +10,7 @@ import { HoldingPanel } from "@/components/HoldingPanel";
 import { CashFlowChart } from "@/components/CashFlowChart";
 import { ProjectSettings } from "@/components/ProjectSettings";
 import { CollectionLogicPanel } from "@/components/CollectionLogicPanel";
+import { SensitivityAnalysis } from "@/components/SensitivityAnalysis";
 
 const number = (n:number, digits=0) => new Intl.NumberFormat("zh-CN",{maximumFractionDigits:digits,minimumFractionDigits:digits}).format(n||0);
 export default function Home() {
@@ -55,6 +56,7 @@ export default function Home() {
         <CollectionLogicPanel rows={result.rows} cutoffMonth={cashFlowCutoff} setCutoffMonth={setCashFlowCutoff} updateRow={store.updateRow}/>
         <CashFlowChart summary={result.summary} project={scenario.project} collectionSchedule={collectionSchedule} cutoffMonth={cashFlowCutoff}/>
         <HoldingPanel rows={result.rows} include={scenario.project.includeHoldingReturns} setInclude={value=>store.updateProject({includeHoldingReturns:value})} updateRow={store.updateRow}/>
+        <SensitivityAnalysis rows={scenario.rows} project={scenario.project}/>
         <footer className="pb-4 text-center text-xs text-slate-400">投资测算 · 数据自动保存在本地浏览器 · 项目金额统一按万元展示</footer>
       </main>
     </div>
