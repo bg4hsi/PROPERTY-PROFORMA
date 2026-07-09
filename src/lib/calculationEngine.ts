@@ -232,7 +232,7 @@ export function calculateCollectionSchedule(rows: CalculatedRow[], months = PROJ
     const monthlySales = Array(months).fill(0) as number[];
     const monthlyCollection = Array(months).fill(0) as number[];
     const monthlySoldUnits = Array(months).fill(0) as number[];
-    if (row.revenue > 0 && logic.totalUnits > 0 && logic.monthlyAbsorptionUnits > 0 && logic.firstSaleMonth > 0) {
+    if (logic.totalUnits > 0 && logic.monthlyAbsorptionUnits > 0 && logic.firstSaleMonth > 0) {
       let remainingUnits = logic.totalUnits;
       for (let saleMonth = logic.firstSaleMonth; saleMonth <= months && remainingUnits > 0; saleMonth++) {
         const units = Math.min(logic.monthlyAbsorptionUnits, remainingUnits);
