@@ -16,12 +16,14 @@ export function EditableTable({ rows, summary, updateRow, addRow, duplicateRow, 
 }) {
   const [draggedId, setDraggedId] = useState<string|null>(null);
   const [dragOverId, setDragOverId] = useState<string|null>(null);
+  const [saleAreaDrafts, setSaleAreaDrafts] = useState<Record<string,string>>({});
   const governmentMode = rows.some(row => row.kind === "给政府");
   const cols = governmentMode ? governmentCols : governmentCols.filter((_, index) => index !== 2);
   const colWidths = governmentMode ? governmentColWidths : governmentColWidths.filter((_, index) => index !== 2);
   const editNum = (row: CalculatedRow, key: keyof AssetRow, nullable = false) => <input className="table-input" type="number" value={(row[key] as number | null) ?? ""} placeholder={nullable ? "自动" : "0"} onChange={e => updateRow(row.id, { [key]: e.target.value === "" && nullable ? null : Number(e.target.value) })} />;
   const editRate = (row: CalculatedRow) => <div className="relative"><input aria-label={`${row.name}得房率`} className="table-input !pr-8" type="number" min="0" max="100" step="0.01" value={((row.efficiencyRate ?? (row.buildingArea ? row.saleArea / row.buildingArea : 0)) * 100).toFixed(2).replace(/\.00$/, "")} onChange={e => updateRow(row.id, { efficiencyRate: Number(e.target.value) / 100 })}/><span className="pointer-events-none absolute right-2 top-1/2 w-3 -translate-y-1/2 text-center text-xs text-slate-400">%</span></div>;
-  const editSaleArea = (row: CalculatedRow) => row.kind === "销售" ? <input className="table-input" type="number" min="0" value={Math.round(row.saleArea || 0)} onChange={e => { const saleArea = Math.max(0, Number(e.target.value)); updateRow(row.id, { saleArea, efficiencyRate: row.buildingArea > 0 ? saleArea / row.buildingArea : 0 }); }} /> : <div className="bg-slate-50/70 px-3 text-right tabular-nums text-slate-400" title="非销售业态销售面积为0">{fmt(row.saleArea)}</div>;
+  const saleAreaText = (value: number) => Number.isInteger(value || 0) ? String(value || 0) : String(Number((value || 0).toFixed(4)));
+  const editSaleArea = (row: CalculatedRow) => row.kind === "销售" ? <input className="table-input" type="text" inputMode="decimal" value={saleAreaDrafts[row.id] ?? saleAreaText(row.saleArea)} onChange={e => { const raw = e.target.value; if (!/^\d*\.?\d*$/.test(raw)) return; setSaleAreaDrafts(drafts => ({ ...drafts, [row.id]: raw })); if (raw === "" || raw === ".") return; const saleArea = Math.max(0, Number(raw)); updateRow(row.id, { saleArea, efficiencyRate: row.buildingArea > 0 ? saleArea / row.buildingArea : 0 }); }} onBlur={() => setSaleAreaDrafts(drafts => { const next = { ...drafts }; delete next[row.id]; return next; })} /> : <div className="bg-slate-50/70 px-3 text-right tabular-nums text-slate-400" title="非销售业态销售面积为0">{fmt(row.saleArea)}</div>;
   const changeKind = (row: CalculatedRow, kind: AssetRow["kind"]) => {
     const efficiencyRate = kind === "销售" && !(row.efficiencyRate && row.efficiencyRate > 0) ? 1 : (row.efficiencyRate || 0);
     updateRow(row.id, { kind, efficiencyRate, governmentArea: kind === "给政府" ? row.buildingArea : 0, saleArea: kind === "销售" ? row.buildingArea * efficiencyRate : 0 });
