@@ -6,8 +6,45 @@ import { sampleScenario } from "@/lib/sampleData";
 import { defaultCollectionLogic, normalizeAssetKind, PROJECTION_MONTHS } from "@/lib/calculationEngine";
 
 const uid = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+const createBlankScenario = (): Scenario => ({
+  id: uid(),
+  name: "空白方案",
+  updatedAt: new Date().toISOString(),
+  project: {
+    name: "空白方案",
+    location: "",
+    landArea: 0,
+    landTotalPrice: 0,
+    totalBuildingArea: 0,
+    saleableArea: 0,
+    heldArea: 0,
+    governmentArea: 0,
+    vatRate: 0.15,
+    managementRate: 0.02,
+    salesRate: 0.05,
+    shareholderInterestRate: 0.08,
+    deliveryMonth: 24,
+    trialOperationMonths: 3,
+    hotelAverageDailyRate: 800,
+    fourStarHotelAverageDailyRate: 600,
+    fiveStarHotelAverageDailyRate: 900,
+    fourStarHotelOpeningCost: 0,
+    fiveStarHotelOpeningCost: 0,
+    mallOpeningCost: 0,
+    commercialMonthlyRent: 150,
+    hotelOccupancyRate: 0.7,
+    commercialOccupancyRate: 0.85,
+    annualOperatingCostRate: 0.35,
+    currencyUnit: "万元",
+    includeHoldingReturns: false
+  },
+  rows: [],
+  allocations: []
+});
+type UndoSnapshot = { scenarios: Scenario[]; activeId: string };
 interface Store {
   scenarios: Scenario[]; activeId: string;
+  undoStack: UndoSnapshot[];
   active: () => Scenario;
   updateProject: (patch: Partial<ProjectInfo>) => void;
   updateRow: (id: string, patch: Partial<AssetRow>) => void;
@@ -15,14 +52,21 @@ interface Store {
   addAllocation: (rule: Omit<AllocationRule, "id">) => void; deleteAllocation: (id: string) => void;
   createScenario: () => void; duplicateScenario: () => void; deleteScenario: () => void;
   renameScenario: (name: string) => void; setActive: (id: string) => void; replaceActive: (scenario: Scenario) => void;
+  undo: () => void;
 }
 
+const snapshot = (state: Pick<Store, "scenarios" | "activeId">): UndoSnapshot => ({
+  scenarios: structuredClone(state.scenarios),
+  activeId: state.activeId
+});
+const pushUndo = (state: Store) => [...state.undoStack, snapshot(state)].slice(-50);
 const updateActive = (state: Store, fn: (scenario: Scenario) => Scenario) => ({
-  scenarios: state.scenarios.map(s => s.id === state.activeId ? { ...fn(s), updatedAt: new Date().toISOString() } : s)
+  scenarios: state.scenarios.map(s => s.id === state.activeId ? { ...fn(s), updatedAt: new Date().toISOString() } : s),
+  undoStack: pushUndo(state)
 });
 
 export const useProjectStore = create<Store>()(persist((set, get) => ({
-  scenarios: [sampleScenario], activeId: sampleScenario.id,
+  scenarios: [sampleScenario], activeId: sampleScenario.id, undoStack: [],
   active: () => get().scenarios.find(s => s.id === get().activeId) || get().scenarios[0],
   updateProject: patch => set(state => updateActive(state, s => {
     if (patch.deliveryMonth === undefined) return { ...s, project: { ...s.project, ...patch } };
@@ -54,10 +98,15 @@ export const useProjectStore = create<Store>()(persist((set, get) => ({
   })),
   addAllocation: rule => set(state => updateActive(state, s => ({ ...s, allocations: [...s.allocations, { ...rule, id: uid() }] }))),
   deleteAllocation: id => set(state => updateActive(state, s => ({ ...s, allocations: s.allocations.filter(a => a.id !== id) }))),
-  createScenario: () => set(state => { const next = { ...sampleScenario, id: uid(), name: "新测算方案", updatedAt: new Date().toISOString(), rows: sampleScenario.rows.map(r => ({ ...r, id: uid() })), allocations: [] }; return { scenarios: [...state.scenarios, next], activeId: next.id }; }),
-  duplicateScenario: () => set(state => { const current = get().active(); const next = { ...structuredClone(current), id: uid(), name: `${current.name} 副本`, updatedAt: new Date().toISOString() }; return { scenarios: [...state.scenarios, next], activeId: next.id }; }),
-  deleteScenario: () => set(state => { if (state.scenarios.length === 1) return state; const list = state.scenarios.filter(s => s.id !== state.activeId); return { scenarios: list, activeId: list[0].id }; }),
+  createScenario: () => set(state => { const next = createBlankScenario(); return { scenarios: [...state.scenarios, next], activeId: next.id, undoStack: pushUndo(state) }; }),
+  duplicateScenario: () => set(state => { const current = get().active(); const next = { ...structuredClone(current), id: uid(), name: `${current.name} 副本`, updatedAt: new Date().toISOString() }; return { scenarios: [...state.scenarios, next], activeId: next.id, undoStack: pushUndo(state) }; }),
+  deleteScenario: () => set(state => { if (state.scenarios.length === 1) return state; const list = state.scenarios.filter(s => s.id !== state.activeId); return { scenarios: list, activeId: list[0].id, undoStack: pushUndo(state) }; }),
   renameScenario: name => set(state => updateActive(state, s => ({ ...s, name, project: { ...s.project, name } }))),
   setActive: activeId => set({ activeId }),
-  replaceActive: scenario => set(state => ({ scenarios: state.scenarios.map(s => s.id === state.activeId ? { ...scenario, id: state.activeId } : s) }))
+  replaceActive: scenario => set(state => ({ scenarios: state.scenarios.map(s => s.id === state.activeId ? { ...scenario, id: state.activeId } : s), undoStack: pushUndo(state) })),
+  undo: () => set(state => {
+    const previous = state.undoStack[state.undoStack.length - 1];
+    if (!previous) return state;
+    return { scenarios: previous.scenarios, activeId: previous.activeId, undoStack: state.undoStack.slice(0, -1) };
+  })
 }), { name: "property-investment-scenarios-v1", partialize: state => ({ scenarios: state.scenarios, activeId: state.activeId }) }));
