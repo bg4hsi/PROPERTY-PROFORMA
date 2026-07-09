@@ -4,6 +4,7 @@ import { defaultCollectionLogic, normalizeAssetKind } from "@/lib/calculationEng
 const headers: Record<string, keyof AssetRow> = {
   "业态": "name", "类型": "kind", "建筑面积（平方米）": "buildingArea", "给政府面积（平方米）": "governmentArea", "分配政府面积（平方米）": "governmentArea",
   "得房率": "efficiencyRate", "销售面积（平方米）": "saleArea", "销售单价（元/平方米）": "salePrice", "单方成本（元/平方米）": "unitCost",
+  "总套数/客房数": "unitCount", "客房数": "unitCount",
   "管理费用覆盖（万元）": "manualManagementFee", "销售费用覆盖（万元）": "manualSalesFee"
 };
 
@@ -14,6 +15,7 @@ export async function exportExcel(scenario: Scenario, calculated: Record<string,
     "业态": row.name, "类型": normalizeAssetKind(row), "建筑面积（平方米）": row.buildingArea,
     ...(governmentMode ? { "给政府面积（平方米）": normalizeAssetKind(row)==="给政府"?row.buildingArea:0 } : {}),
     "得房率": row.efficiencyRate ?? (row.buildingArea ? row.saleArea / row.buildingArea : 0), "销售面积（平方米）": row.buildingArea * (row.efficiencyRate ?? (row.buildingArea ? row.saleArea / row.buildingArea : 0)), "销售单价（元/平方米）": row.salePrice, "单方成本（元/平方米）": row.unitCost,
+    "总套数/客房数": row.unitCount ?? row.collection?.totalUnits ?? row.holding?.roomCount ?? 0,
     "管理费用覆盖（万元）": row.manualManagementFee, "销售费用覆盖（万元）": row.manualSalesFee,
     "首售月": defaultCollectionLogic(row).firstSaleMonth, "总套数": defaultCollectionLogic(row).totalUnits,
     "月去化（套）": defaultCollectionLogic(row).monthlyAbsorptionUnits, "首付款比例": defaultCollectionLogic(row).downPaymentRate,
@@ -48,12 +50,14 @@ export async function importExcel(file: File, current: Scenario): Promise<Scenar
     next.saleArea = next.buildingArea * (next.efficiencyRate || 0);
     const fallback = defaultCollectionLogic(next);
     const ratio = (label: string, fallbackValue: number) => label in item ? (Number(item[label]) > 1 ? Number(item[label]) / 100 : Number(item[label])) : fallbackValue;
+    next.unitCount = next.unitCount ?? Number(item["总套数"] ?? fallback.totalUnits);
     next.collection = {
       firstSaleMonth: Number(item["首售月"] ?? fallback.firstSaleMonth), deliveryMonth: current.project.deliveryMonth || 24,
-      totalUnits: Number(item["总套数"] ?? fallback.totalUnits), monthlyAbsorptionUnits: Number(item["月去化（套）"] ?? fallback.monthlyAbsorptionUnits),
+      totalUnits: next.unitCount ?? Number(item["总套数"] ?? fallback.totalUnits), monthlyAbsorptionUnits: Number(item["月去化（套）"] ?? fallback.monthlyAbsorptionUnits),
       downPaymentRate: ratio("首付款比例", fallback.downPaymentRate), monthlyCollectionRate: ratio("月回款比例", fallback.monthlyCollectionRate),
       tailInstallmentMonths: Number(item["尾款分期（月）"] ?? fallback.tailInstallmentMonths)
     };
+    if (next.kind === "自持酒店") next.holding = { ...(next.holding || { annualRent: 0, annualOperatingIncome: 0, annualOperatingCost: 0, holdingYears: 10, discountRate: .08 }), roomCount: next.unitCount };
     return next;
   });
   if (!rows.length) throw new Error("未找到“业态”列或有效数据");

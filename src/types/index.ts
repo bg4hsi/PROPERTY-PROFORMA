@@ -64,6 +64,8 @@ export interface AssetRow {
   saleArea: number;
   salePrice: number;
   unitCost: number;
+  /** 业态数量：销售业态表示总套数，自持酒店表示客房数。 */
+  unitCount?: number;
   manualManagementFee: number | null;
   manualSalesFee: number | null;
   manualSecondaryAllocation: number;

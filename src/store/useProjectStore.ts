@@ -76,12 +76,14 @@ export const useProjectStore = create<Store>()(persist((set, get) => ({
   updateRow: (id, patch) => set(state => updateActive(state, s => ({ ...s, rows: s.rows.map(row => {
     if (row.id !== id) return row;
     const next = { ...row, ...patch };
+    if (patch.collection?.totalUnits !== undefined) next.unitCount = patch.collection.totalUnits;
+    if (patch.holding?.roomCount !== undefined) next.unitCount = patch.holding.roomCount;
     if (patch.kind === "销售" && normalizeAssetKind(row) !== "销售") {
       next.collection = { ...defaultCollectionLogic(next), deliveryMonth: s.project.deliveryMonth || 24 };
     }
     return next;
   }) }))),
-  addRow: () => set(state => updateActive(state, s => ({ ...s, rows: [...s.rows, { id: uid(), name: "新业态", kind: "销售", buildingArea: 0, governmentArea: 0, efficiencyRate: 0, saleArea: 0, salePrice: 0, unitCost: 0, manualManagementFee: null, manualSalesFee: null, manualSecondaryAllocation: 0, collection: { firstSaleMonth: 1, deliveryMonth: s.project.deliveryMonth || 24, totalUnits: 0, monthlyAbsorptionUnits: 0, downPaymentRate: .3, monthlyCollectionRate: .05, tailInstallmentMonths: 3 } }] }))),
+  addRow: () => set(state => updateActive(state, s => ({ ...s, rows: [...s.rows, { id: uid(), name: "新业态", kind: "销售", buildingArea: 0, governmentArea: 0, efficiencyRate: 0, saleArea: 0, salePrice: 0, unitCost: 0, unitCount: 0, manualManagementFee: null, manualSalesFee: null, manualSecondaryAllocation: 0, collection: { firstSaleMonth: 1, deliveryMonth: s.project.deliveryMonth || 24, totalUnits: 0, monthlyAbsorptionUnits: 0, downPaymentRate: .3, monthlyCollectionRate: .05, tailInstallmentMonths: 3 } }] }))),
   duplicateRow: id => set(state => updateActive(state, s => ({ ...s, rows: s.rows.flatMap(r => r.id === id ? [r, { ...r, id: uid(), name: `${r.name} 副本` }] : [r]) }))),
   deleteRow: id => set(state => updateActive(state, s => ({ ...s, rows: s.rows.filter(r => r.id !== id), allocations: s.allocations.filter(a => !a.sourceIds.includes(id) && !a.targetIds.includes(id)) }))),
   reorderRow: (sourceId, targetId) => set(state => updateActive(state, s => {
