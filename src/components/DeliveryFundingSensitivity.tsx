@@ -22,7 +22,7 @@ export function DeliveryFundingSensitivity({ rows, project }: { rows: AssetRow[]
     const evaluate = (deliveryMonth: number) => {
       const adjustedProject = { ...project, deliveryMonth };
       const result = calculateProject(rows, adjustedProject, []);
-      const schedule = calculateCollectionSchedule(result.rows, PROJECTION_MONTHS);
+      const schedule = calculateCollectionSchedule(result.rows, PROJECTION_MONTHS, adjustedProject);
       const summary = calculateSimulationSummary(result.summary, {
         managementRate: adjustedProject.managementRate,
         salesRate: adjustedProject.salesRate,

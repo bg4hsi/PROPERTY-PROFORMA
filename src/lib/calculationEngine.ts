@@ -161,7 +161,7 @@ export function calculateProject(rows: AssetRow[], project: ProjectInfo, allocat
   const baseRows = calculateRows(rows, project, allocations);
   const baseSummary = calculateSummary(baseRows, project);
   const months = PROJECTION_MONTHS;
-  const collectionSchedule = calculateCollectionSchedule(baseRows, months);
+  const collectionSchedule = calculateCollectionSchedule(baseRows, months, project);
   const cashFlow = calculateCashFlowProjection(baseSummary, months, collectionSchedule, project.deliveryMonth || 24, project.trialOperationMonths ?? 3);
   const monthlyRate = Math.max(0, project.shareholderInterestRate ?? .08) / 12;
   const shareholderInterestTotal = round(cashFlow.reduce((total, point) => total + Math.max(0, -point.cumulativeNetCashFlow) * monthlyRate, 0));
@@ -217,7 +217,9 @@ export interface CollectionSchedule {
   rows: RowCollectionProjection[];
 }
 
-export function defaultCollectionLogic(row: AssetRow, project?: Pick<ProjectInfo, "collectionDownPaymentRate" | "collectionMonthlyRate" | "collectionTailInstallmentMonths">) {
+type CollectionProjectSettings = Pick<ProjectInfo, "collectionDownPaymentRate" | "collectionMonthlyRate" | "collectionTailInstallmentMonths">;
+
+export function defaultCollectionLogic(row: AssetRow, project: CollectionProjectSettings) {
   const downPaymentRate = project?.collectionDownPaymentRate ?? row.collection?.downPaymentRate ?? .3;
   const monthlyCollectionRate = project?.collectionMonthlyRate ?? row.collection?.monthlyCollectionRate ?? .05;
   const tailInstallmentMonths = project?.collectionTailInstallmentMonths ?? row.collection?.tailInstallmentMonths ?? 3;
@@ -228,11 +230,11 @@ export function defaultCollectionLogic(row: AssetRow, project?: Pick<ProjectInfo
   return { firstSaleMonth: row.name.includes("商业") ? 6 : 1, deliveryMonth: 24, totalUnits, monthlyAbsorptionUnits: Math.max(1, Math.ceil(totalUnits / 18)), downPaymentRate, monthlyCollectionRate, tailInstallmentMonths };
 }
 
-export function calculateCollectionSchedule(rows: CalculatedRow[], months = PROJECTION_MONTHS): CollectionSchedule {
+export function calculateCollectionSchedule(rows: CalculatedRow[], months: number, project: CollectionProjectSettings): CollectionSchedule {
   const totalMonthlySales = Array(months).fill(0) as number[];
   const totalMonthlyCollection = Array(months).fill(0) as number[];
   const projections = rows.map(row => {
-    const logic = defaultCollectionLogic(row);
+    const logic = defaultCollectionLogic(row, project);
     const monthlySales = Array(months).fill(0) as number[];
     const monthlyCollection = Array(months).fill(0) as number[];
     const monthlySoldUnits = Array(months).fill(0) as number[];
