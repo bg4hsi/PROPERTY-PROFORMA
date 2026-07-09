@@ -220,9 +220,9 @@ export interface CollectionSchedule {
 type CollectionProjectSettings = Pick<ProjectInfo, "collectionDownPaymentRate" | "collectionMonthlyRate" | "collectionTailInstallmentMonths">;
 
 export function defaultCollectionLogic(row: AssetRow, project: CollectionProjectSettings) {
-  const downPaymentRate = project?.collectionDownPaymentRate ?? row.collection?.downPaymentRate ?? .3;
-  const monthlyCollectionRate = project?.collectionMonthlyRate ?? row.collection?.monthlyCollectionRate ?? .05;
-  const tailInstallmentMonths = project?.collectionTailInstallmentMonths ?? row.collection?.tailInstallmentMonths ?? 3;
+  const downPaymentRate = project.collectionDownPaymentRate ?? .3;
+  const monthlyCollectionRate = project.collectionMonthlyRate ?? .05;
+  const tailInstallmentMonths = project.collectionTailInstallmentMonths ?? 3;
   if (normalizeAssetKind(row) !== "销售") return { firstSaleMonth: 0, deliveryMonth: 0, totalUnits: 0, monthlyAbsorptionUnits: 0, downPaymentRate: 0, monthlyCollectionRate: 0, tailInstallmentMonths: 0 };
   if (row.collection) return { ...row.collection, totalUnits: row.unitCount ?? 0, downPaymentRate, monthlyCollectionRate, tailInstallmentMonths };
   if (!row.saleArea) return { firstSaleMonth: 0, deliveryMonth: 0, totalUnits: 0, monthlyAbsorptionUnits: 0, downPaymentRate: 0, monthlyCollectionRate: 0, tailInstallmentMonths: 0 };

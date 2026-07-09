@@ -63,6 +63,20 @@ const snapshot = (state: Pick<Store, "scenarios" | "activeId">): UndoSnapshot =>
   activeId: state.activeId
 });
 const pushUndo = (state: Store) => [...state.undoStack, snapshot(state)].slice(-50);
+const projectDefaults: ProjectInfo = createBlankScenario().project;
+const normalizeScenario = (scenario: Scenario): Scenario => ({
+  ...scenario,
+  project: { ...projectDefaults, ...scenario.project },
+  rows: scenario.rows.map(row => ({
+    ...row,
+    collection: row.collection ? {
+      ...row.collection,
+      downPaymentRate: scenario.project.collectionDownPaymentRate ?? projectDefaults.collectionDownPaymentRate ?? .3,
+      monthlyCollectionRate: scenario.project.collectionMonthlyRate ?? projectDefaults.collectionMonthlyRate ?? .05,
+      tailInstallmentMonths: scenario.project.collectionTailInstallmentMonths ?? projectDefaults.collectionTailInstallmentMonths ?? 3
+    } : row.collection
+  }))
+});
 const updateActive = (state: Store, fn: (scenario: Scenario) => Scenario) => ({
   scenarios: state.scenarios.map(s => s.id === state.activeId ? { ...fn(s), updatedAt: new Date().toISOString() } : s),
   undoStack: pushUndo(state)
@@ -111,4 +125,13 @@ export const useProjectStore = create<Store>()(persist((set, get) => ({
     if (!previous) return state;
     return { scenarios: previous.scenarios, activeId: previous.activeId, undoStack: state.undoStack.slice(0, -1) };
   })
-}), { name: "property-investment-scenarios-v1", partialize: state => ({ scenarios: state.scenarios, activeId: state.activeId }) }));
+}), {
+  name: "property-investment-scenarios-v1",
+  partialize: state => ({ scenarios: state.scenarios, activeId: state.activeId }),
+  merge: (persisted, current) => {
+    const saved = persisted as Partial<Pick<Store, "scenarios" | "activeId">>;
+    const scenarios = (saved.scenarios?.length ? saved.scenarios : current.scenarios).map(normalizeScenario);
+    const activeId = scenarios.some(scenario => scenario.id === saved.activeId) ? saved.activeId! : scenarios[0]?.id ?? current.activeId;
+    return { ...current, scenarios, activeId };
+  }
+}));
