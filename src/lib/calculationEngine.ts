@@ -216,8 +216,9 @@ export interface CollectionSchedule {
 }
 
 export function defaultCollectionLogic(row: AssetRow) {
-  if (!row.saleArea || normalizeAssetKind(row) !== "销售") return { firstSaleMonth: 0, deliveryMonth: 0, totalUnits: 0, monthlyAbsorptionUnits: 0, downPaymentRate: 0, monthlyCollectionRate: 0, tailInstallmentMonths: 0 };
+  if (normalizeAssetKind(row) !== "销售") return { firstSaleMonth: 0, deliveryMonth: 0, totalUnits: 0, monthlyAbsorptionUnits: 0, downPaymentRate: 0, monthlyCollectionRate: 0, tailInstallmentMonths: 0 };
   if (row.collection) return row.collection;
+  if (!row.saleArea) return { firstSaleMonth: 0, deliveryMonth: 0, totalUnits: 0, monthlyAbsorptionUnits: 0, downPaymentRate: 0, monthlyCollectionRate: 0, tailInstallmentMonths: 0 };
   const totalUnits = row.name.includes("公寓") ? Math.max(1, Math.round(row.saleArea / 56.16)) : Math.max(1, Math.round(row.saleArea / 100));
   return { firstSaleMonth: row.name.includes("商业") ? 6 : 1, deliveryMonth: 24, totalUnits, monthlyAbsorptionUnits: Math.max(1, Math.ceil(totalUnits / 18)), downPaymentRate: .3, monthlyCollectionRate: .05, tailInstallmentMonths: 3 };
 }

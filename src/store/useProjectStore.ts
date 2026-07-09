@@ -71,10 +71,7 @@ export const useProjectStore = create<Store>()(persist((set, get) => ({
   updateProject: patch => set(state => updateActive(state, s => {
     if (patch.deliveryMonth === undefined) return { ...s, project: { ...s.project, ...patch } };
     const deliveryMonth = Math.max(1, Math.min(PROJECTION_MONTHS, Math.round(patch.deliveryMonth)));
-    const rows = s.rows.map(row => normalizeAssetKind(row) === "销售"
-      ? { ...row, collection: { ...defaultCollectionLogic(row), deliveryMonth } }
-      : row);
-    return { ...s, project: { ...s.project, ...patch, deliveryMonth }, rows };
+    return { ...s, project: { ...s.project, ...patch, deliveryMonth } };
   })),
   updateRow: (id, patch) => set(state => updateActive(state, s => ({ ...s, rows: s.rows.map(row => {
     if (row.id !== id) return row;
