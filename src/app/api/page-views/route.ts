@@ -6,14 +6,23 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const dataFile = process.env.PAGE_VIEW_DATA_FILE || path.join(process.cwd(), "data", "page-views.json");
-type PageViewStats = { count: number; lastIp: string; lastVisitedAt: string | null; updatedAt?: string };
-let updateQueue: Promise<PageViewStats> = Promise.resolve({ count: 0, lastIp: "—", lastVisitedAt: null });
+type VisitRecord = { ip: string; visitedAt: string };
+type PageViewStats = { count: number; lastIp: string; lastVisitedAt: string | null; recentVisits: VisitRecord[]; updatedAt?: string };
+let updateQueue: Promise<PageViewStats> = Promise.resolve({ count: 0, lastIp: "—", lastVisitedAt: null, recentVisits: [] });
 
-function normalizeStats(data: Partial<PageViewStats> = {}): PageViewStats {
+function normalizeStats(data: Partial<PageViewStats & { recentVisits?: VisitRecord[] }> = {}): PageViewStats {
+  const legacyVisit = data.lastIp && (data.lastVisitedAt || data.updatedAt)
+    ? [{ ip: data.lastIp, visitedAt: data.lastVisitedAt || data.updatedAt! }]
+    : [];
+  const recentVisits = (Array.isArray(data.recentVisits) && data.recentVisits.length ? data.recentVisits : legacyVisit)
+    .filter(visit => visit?.ip && visit?.visitedAt)
+    .slice(0, 3);
+  const latest = recentVisits[0];
   return {
     count: Math.max(0, Math.floor(Number(data.count) || 0)),
-    lastIp: data.lastIp || "—",
-    lastVisitedAt: data.lastVisitedAt || data.updatedAt || null,
+    lastIp: latest?.ip || data.lastIp || "—",
+    lastVisitedAt: latest?.visitedAt || data.lastVisitedAt || data.updatedAt || null,
+    recentVisits,
     updatedAt: data.updatedAt
   };
 }
@@ -49,7 +58,9 @@ export async function POST(request: NextRequest) {
   updateQueue = updateQueue.catch(() => normalizeStats()).then(async () => {
     const current = await readStats();
     const updatedAt = new Date().toISOString();
-    const stats = { count: current.count + 1, lastIp: getClientIp(request), lastVisitedAt: updatedAt, updatedAt };
+    const ip = getClientIp(request);
+    const recentVisits = [{ ip, visitedAt: updatedAt }, ...current.recentVisits].slice(0, 3);
+    const stats = { count: current.count + 1, lastIp: ip, lastVisitedAt: updatedAt, recentVisits, updatedAt };
     await saveStats(stats);
     return stats;
   });
