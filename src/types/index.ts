@@ -16,6 +16,12 @@ export interface ProjectInfo {
   managementRate: number;
   salesRate: number;
   shareholderInterestRate: number;
+  /** 销售回款统一口径：首付款比例。 */
+  collectionDownPaymentRate?: number;
+  /** 销售回款统一口径：月回款比例。 */
+  collectionMonthlyRate?: number;
+  /** 销售回款统一口径：尾款分期月数。 */
+  collectionTailInstallmentMonths?: number;
   deliveryMonth: number;
   trialOperationMonths: number;
   /** 旧方案兼容字段，新方案使用四星/五星价格。 */

@@ -45,9 +45,9 @@ export function calculateRows(rows: AssetRow[], project: ProjectInfo, _allocatio
     const efficiencyRate = row.efficiencyRate ?? (row.buildingArea ? row.saleArea / row.buildingArea : 0);
     const saleArea = kind === "销售" ? round(row.buildingArea * efficiencyRate) : 0;
     const governmentArea = kind === "给政府" ? round(row.buildingArea) : 0;
-    const unitCount = row.unitCount ?? row.collection?.totalUnits ?? row.holding?.roomCount;
+    const unitCount = row.unitCount;
     const normalized = { ...row, kind, efficiencyRate, saleArea, governmentArea, unitCount };
-    const collection = kind === "销售" ? { ...defaultCollectionLogic(normalized), deliveryMonth: projectDeliveryMonth } : row.collection;
+    const collection = kind === "销售" ? { ...defaultCollectionLogic(normalized, project), deliveryMonth: projectDeliveryMonth } : row.collection;
     return { ...normalized, collection };
   });
   const revenues = new Map(normalizedRows.map(row => [row.id, round(row.saleArea * row.salePrice / 10000)]));
@@ -101,7 +101,7 @@ export function calculateRows(rows: AssetRow[], project: ProjectInfo, _allocatio
     const isCommercial = eligibleForHoldingReturn && row.kind === "自持商业";
     const isOtherHolding = eligibleForHoldingReturn && row.kind === "其他自持";
     const holdingBase = (isHotel || isCommercial || isOtherHolding) ? (row.holding || { annualRent: 0, annualOperatingIncome: 0, annualOperatingCost: 0, holdingYears: 10, discountRate: .08 }) : undefined;
-    const roomCount = row.unitCount ?? holdingBase?.roomCount ?? 0;
+    const roomCount = row.unitCount ?? 0;
     const isFiveStarHotel = /五星|5\s*星/i.test(row.name);
     const legacyHotelRate = project.hotelAverageDailyRate ?? 800;
     const fourStarHotelRate = project.fourStarHotelAverageDailyRate ?? legacyHotelRate;
@@ -217,12 +217,15 @@ export interface CollectionSchedule {
   rows: RowCollectionProjection[];
 }
 
-export function defaultCollectionLogic(row: AssetRow) {
+export function defaultCollectionLogic(row: AssetRow, project?: Pick<ProjectInfo, "collectionDownPaymentRate" | "collectionMonthlyRate" | "collectionTailInstallmentMonths">) {
+  const downPaymentRate = project?.collectionDownPaymentRate ?? row.collection?.downPaymentRate ?? .3;
+  const monthlyCollectionRate = project?.collectionMonthlyRate ?? row.collection?.monthlyCollectionRate ?? .05;
+  const tailInstallmentMonths = project?.collectionTailInstallmentMonths ?? row.collection?.tailInstallmentMonths ?? 3;
   if (normalizeAssetKind(row) !== "销售") return { firstSaleMonth: 0, deliveryMonth: 0, totalUnits: 0, monthlyAbsorptionUnits: 0, downPaymentRate: 0, monthlyCollectionRate: 0, tailInstallmentMonths: 0 };
-  if (row.collection) return { ...row.collection, totalUnits: row.unitCount ?? row.collection.totalUnits };
+  if (row.collection) return { ...row.collection, totalUnits: row.unitCount ?? 0, downPaymentRate, monthlyCollectionRate, tailInstallmentMonths };
   if (!row.saleArea) return { firstSaleMonth: 0, deliveryMonth: 0, totalUnits: 0, monthlyAbsorptionUnits: 0, downPaymentRate: 0, monthlyCollectionRate: 0, tailInstallmentMonths: 0 };
   const totalUnits = row.unitCount ?? 0;
-  return { firstSaleMonth: row.name.includes("商业") ? 6 : 1, deliveryMonth: 24, totalUnits, monthlyAbsorptionUnits: Math.max(1, Math.ceil(totalUnits / 18)), downPaymentRate: .3, monthlyCollectionRate: .05, tailInstallmentMonths: 3 };
+  return { firstSaleMonth: row.name.includes("商业") ? 6 : 1, deliveryMonth: 24, totalUnits, monthlyAbsorptionUnits: Math.max(1, Math.ceil(totalUnits / 18)), downPaymentRate, monthlyCollectionRate, tailInstallmentMonths };
 }
 
 export function calculateCollectionSchedule(rows: CalculatedRow[], months = PROJECTION_MONTHS): CollectionSchedule {

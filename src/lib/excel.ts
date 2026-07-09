@@ -13,13 +13,13 @@ export async function exportExcel(scenario: Scenario, calculated: Record<string,
   const governmentMode = scenario.rows.some(row => normalizeAssetKind(row) === "给政府");
   const inputSheet = XLSX.utils.json_to_sheet(scenario.rows.map(row => {
     const kind = normalizeAssetKind(row);
-    const logic = defaultCollectionLogic(row);
+    const logic = defaultCollectionLogic(row, scenario.project);
     const saleArea = row.buildingArea * (row.efficiencyRate ?? (row.buildingArea ? row.saleArea / row.buildingArea : 0));
     return {
       "业态": row.name, "类型": kind, "建筑面积（平方米）": row.buildingArea,
       ...(governmentMode ? { "给政府面积（平方米）": kind === "给政府" ? row.buildingArea : 0 } : {}),
       "得房率": row.efficiencyRate ?? (row.buildingArea ? row.saleArea / row.buildingArea : 0), "销售面积（平方米）": saleArea, "销售单价（元/平方米）": row.salePrice, "单方成本（元/平方米）": row.unitCost,
-      "总套数/客房数": row.unitCount ?? row.collection?.totalUnits ?? row.holding?.roomCount ?? 0,
+      "总套数/客房数": row.unitCount ?? "",
       "管理费用覆盖（万元）": row.manualManagementFee, "销售费用覆盖（万元）": row.manualSalesFee,
       "首售月": kind === "销售" ? logic.firstSaleMonth : "",
       "月去化（套）": kind === "销售" ? logic.monthlyAbsorptionUnits : "", "首付款比例": kind === "销售" ? logic.downPaymentRate : "",
@@ -53,14 +53,14 @@ export async function importExcel(file: File, current: Scenario): Promise<Scenar
       next.efficiencyRate = next.buildingArea ? next.saleArea / next.buildingArea : 0;
     }
     next.saleArea = next.buildingArea * (next.efficiencyRate || 0);
-    const fallback = defaultCollectionLogic(next);
-    const ratio = (label: string, fallbackValue: number) => label in item ? (Number(item[label]) > 1 ? Number(item[label]) / 100 : Number(item[label])) : fallbackValue;
-    next.unitCount = next.unitCount ?? Number(item["总套数/客房数"] ?? item["客房数"] ?? item["总套数"] ?? fallback.totalUnits);
+    const fallback = defaultCollectionLogic(next, current.project);
+    const unitCountRaw = item["总套数/客房数"] ?? item["客房数"] ?? item["总套数"];
+    next.unitCount = unitCountRaw === undefined || unitCountRaw === null || unitCountRaw === "" ? undefined : Number(unitCountRaw);
     next.collection = {
       firstSaleMonth: Number(item["首售月"] ?? fallback.firstSaleMonth), deliveryMonth: current.project.deliveryMonth || 24,
-      totalUnits: next.unitCount ?? Number(item["总套数"] ?? fallback.totalUnits), monthlyAbsorptionUnits: Number(item["月去化（套）"] ?? fallback.monthlyAbsorptionUnits),
-      downPaymentRate: ratio("首付款比例", fallback.downPaymentRate), monthlyCollectionRate: ratio("月回款比例", fallback.monthlyCollectionRate),
-      tailInstallmentMonths: Number(item["尾款分期（月）"] ?? fallback.tailInstallmentMonths)
+      totalUnits: next.unitCount ?? 0, monthlyAbsorptionUnits: Number(item["月去化（套）"] ?? fallback.monthlyAbsorptionUnits),
+      downPaymentRate: current.project.collectionDownPaymentRate ?? fallback.downPaymentRate, monthlyCollectionRate: current.project.collectionMonthlyRate ?? fallback.monthlyCollectionRate,
+      tailInstallmentMonths: current.project.collectionTailInstallmentMonths ?? fallback.tailInstallmentMonths
     };
     if (next.kind === "自持酒店") next.holding = { ...(next.holding || { annualRent: 0, annualOperatingIncome: 0, annualOperatingCost: 0, holdingYears: 10, discountRate: .08 }), roomCount: next.unitCount };
     return next;
