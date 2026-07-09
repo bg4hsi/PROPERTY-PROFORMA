@@ -11,16 +11,21 @@ const headers: Record<string, keyof AssetRow> = {
 export async function exportExcel(scenario: Scenario, calculated: Record<string, unknown>[]) {
   const XLSX = await import("xlsx");
   const governmentMode = scenario.rows.some(row => normalizeAssetKind(row) === "给政府");
-  const inputSheet = XLSX.utils.json_to_sheet(scenario.rows.map(row => ({
-    "业态": row.name, "类型": normalizeAssetKind(row), "建筑面积（平方米）": row.buildingArea,
-    ...(governmentMode ? { "给政府面积（平方米）": normalizeAssetKind(row)==="给政府"?row.buildingArea:0 } : {}),
-    "得房率": row.efficiencyRate ?? (row.buildingArea ? row.saleArea / row.buildingArea : 0), "销售面积（平方米）": row.buildingArea * (row.efficiencyRate ?? (row.buildingArea ? row.saleArea / row.buildingArea : 0)), "销售单价（元/平方米）": row.salePrice, "单方成本（元/平方米）": row.unitCost,
-    "总套数/客房数": row.unitCount ?? row.collection?.totalUnits ?? row.holding?.roomCount ?? 0,
-    "管理费用覆盖（万元）": row.manualManagementFee, "销售费用覆盖（万元）": row.manualSalesFee,
-    "首售月": defaultCollectionLogic(row).firstSaleMonth,
-    "月去化（套）": defaultCollectionLogic(row).monthlyAbsorptionUnits, "首付款比例": defaultCollectionLogic(row).downPaymentRate,
-    "月回款比例": defaultCollectionLogic(row).monthlyCollectionRate, "尾款分期（月）": defaultCollectionLogic(row).tailInstallmentMonths
-  })));
+  const inputSheet = XLSX.utils.json_to_sheet(scenario.rows.map(row => {
+    const kind = normalizeAssetKind(row);
+    const logic = defaultCollectionLogic(row);
+    const saleArea = row.buildingArea * (row.efficiencyRate ?? (row.buildingArea ? row.saleArea / row.buildingArea : 0));
+    return {
+      "业态": row.name, "类型": kind, "建筑面积（平方米）": row.buildingArea,
+      ...(governmentMode ? { "给政府面积（平方米）": kind === "给政府" ? row.buildingArea : 0 } : {}),
+      "得房率": row.efficiencyRate ?? (row.buildingArea ? row.saleArea / row.buildingArea : 0), "销售面积（平方米）": saleArea, "销售单价（元/平方米）": row.salePrice, "单方成本（元/平方米）": row.unitCost,
+      "总套数/客房数": row.unitCount ?? row.collection?.totalUnits ?? row.holding?.roomCount ?? 0,
+      "管理费用覆盖（万元）": row.manualManagementFee, "销售费用覆盖（万元）": row.manualSalesFee,
+      "首售月": kind === "销售" ? logic.firstSaleMonth : "",
+      "月去化（套）": kind === "销售" ? logic.monthlyAbsorptionUnits : "", "首付款比例": kind === "销售" ? logic.downPaymentRate : "",
+      "月回款比例": kind === "销售" ? logic.monthlyCollectionRate : "", "尾款分期（月）": kind === "销售" ? logic.tailInstallmentMonths : ""
+    };
+  }));
   const resultSheet = XLSX.utils.json_to_sheet(calculated);
   const infoSheet = XLSX.utils.json_to_sheet(Object.entries(scenario.project).map(([key, value]) => ({ 字段: key, 数值: value })));
   const wb = XLSX.utils.book_new();

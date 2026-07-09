@@ -3,9 +3,8 @@ import { Scenario } from "@/types";
 const holding = { annualRent: 0, annualOperatingIncome: 0, annualOperatingCost: 0, holdingYears: 10, discountRate: 0.08 };
 const row = (id: string, name: string, kind: "销售" | "给政府" | "自持酒店" | "自持商业", buildingArea: number, governmentArea: number, saleArea: number, salePrice: number, unitCost: number) => ({
   id, name, kind, buildingArea, governmentArea, efficiencyRate: buildingArea ? saleArea / buildingArea : 0, saleArea, salePrice, unitCost,
-  ...(kind === "自持酒店" ? { unitCount: Math.round(buildingArea / 50) } : {}),
   manualManagementFee: null, manualSalesFee: null, manualSecondaryAllocation: 0,
-  ...(kind.startsWith("自持") ? { holding: { ...holding, ...(kind === "自持酒店" ? { roomCount: Math.round(buildingArea / 50) } : {}) } } : {})
+  ...(kind.startsWith("自持") ? { holding: { ...holding, ...(kind === "自持酒店" ? { roomCount: 0 } : {}) } } : {})
 });
 
 const collection = (firstSaleMonth: number, deliveryMonth: number, totalUnits: number, monthlyAbsorptionUnits: number, downPaymentRate: number, monthlyCollectionRate: number, tailInstallmentMonths: number) => ({ firstSaleMonth, deliveryMonth, totalUnits, monthlyAbsorptionUnits, downPaymentRate, monthlyCollectionRate, tailInstallmentMonths });
