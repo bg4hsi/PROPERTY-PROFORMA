@@ -64,18 +64,22 @@ const snapshot = (state: Pick<Store, "scenarios" | "activeId">): UndoSnapshot =>
 });
 const pushUndo = (state: Store) => [...state.undoStack, snapshot(state)].slice(-50);
 const projectDefaults: ProjectInfo = createBlankScenario().project;
+const normalizeProject = (project: ProjectInfo): ProjectInfo => ({ ...projectDefaults, ...project });
 const normalizeScenario = (scenario: Scenario): Scenario => ({
   ...scenario,
-  project: { ...projectDefaults, ...scenario.project },
-  rows: scenario.rows.map(row => ({
-    ...row,
-    collection: row.collection ? {
-      ...row.collection,
-      downPaymentRate: scenario.project.collectionDownPaymentRate ?? projectDefaults.collectionDownPaymentRate ?? .3,
-      monthlyCollectionRate: scenario.project.collectionMonthlyRate ?? projectDefaults.collectionMonthlyRate ?? .05,
-      tailInstallmentMonths: scenario.project.collectionTailInstallmentMonths ?? projectDefaults.collectionTailInstallmentMonths ?? 3
-    } : row.collection
-  }))
+  project: normalizeProject(scenario.project),
+  rows: scenario.rows.map(row => {
+    const project = normalizeProject(scenario.project);
+    return {
+      ...row,
+      collection: row.collection ? {
+        ...row.collection,
+        downPaymentRate: project.collectionDownPaymentRate ?? .3,
+        monthlyCollectionRate: project.collectionMonthlyRate ?? .05,
+        tailInstallmentMonths: project.collectionTailInstallmentMonths ?? 3
+      } : row.collection
+    };
+  })
 });
 const updateActive = (state: Store, fn: (scenario: Scenario) => Scenario) => ({
   scenarios: state.scenarios.map(s => s.id === state.activeId ? { ...fn(s), updatedAt: new Date().toISOString() } : s),
