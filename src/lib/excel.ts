@@ -15,7 +15,7 @@ export async function exportExcel(scenario: Scenario, calculated: Record<string,
     ...(governmentMode ? { "给政府面积（平方米）": normalizeAssetKind(row)==="给政府"?row.buildingArea:0 } : {}),
     "得房率": row.efficiencyRate ?? (row.buildingArea ? row.saleArea / row.buildingArea : 0), "销售面积（平方米）": row.buildingArea * (row.efficiencyRate ?? (row.buildingArea ? row.saleArea / row.buildingArea : 0)), "销售单价（元/平方米）": row.salePrice, "单方成本（元/平方米）": row.unitCost,
     "管理费用覆盖（万元）": row.manualManagementFee, "销售费用覆盖（万元）": row.manualSalesFee,
-    "首售月": defaultCollectionLogic(row).firstSaleMonth, "交付月": defaultCollectionLogic(row).deliveryMonth, "总套数": defaultCollectionLogic(row).totalUnits,
+    "首售月": defaultCollectionLogic(row).firstSaleMonth, "总套数": defaultCollectionLogic(row).totalUnits,
     "月去化（套）": defaultCollectionLogic(row).monthlyAbsorptionUnits, "首付款比例": defaultCollectionLogic(row).downPaymentRate,
     "月回款比例": defaultCollectionLogic(row).monthlyCollectionRate, "尾款分期（月）": defaultCollectionLogic(row).tailInstallmentMonths
   })));
@@ -49,7 +49,7 @@ export async function importExcel(file: File, current: Scenario): Promise<Scenar
     const fallback = defaultCollectionLogic(next);
     const ratio = (label: string, fallbackValue: number) => label in item ? (Number(item[label]) > 1 ? Number(item[label]) / 100 : Number(item[label])) : fallbackValue;
     next.collection = {
-      firstSaleMonth: Number(item["首售月"] ?? fallback.firstSaleMonth), deliveryMonth: Number(item["交付月"] ?? fallback.deliveryMonth),
+      firstSaleMonth: Number(item["首售月"] ?? fallback.firstSaleMonth), deliveryMonth: current.project.deliveryMonth || 24,
       totalUnits: Number(item["总套数"] ?? fallback.totalUnits), monthlyAbsorptionUnits: Number(item["月去化（套）"] ?? fallback.monthlyAbsorptionUnits),
       downPaymentRate: ratio("首付款比例", fallback.downPaymentRate), monthlyCollectionRate: ratio("月回款比例", fallback.monthlyCollectionRate),
       tailInstallmentMonths: Number(item["尾款分期（月）"] ?? fallback.tailInstallmentMonths)

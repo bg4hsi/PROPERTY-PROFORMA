@@ -39,12 +39,15 @@ export function irr(cashflows: number[]): number | null {
 
 export function calculateRows(rows: AssetRow[], project: ProjectInfo, _allocations: AllocationRule[]): CalculatedRow[] {
   // 兼容旧方案：首次计算时用历史销售面积反推得房率；此后销售面积始终由公式生成。
+  const projectDeliveryMonth = Math.max(1, Math.min(PROJECTION_MONTHS, Math.round(project.deliveryMonth || 24)));
   const normalizedRows = rows.map(row => {
     const kind = normalizeAssetKind(row);
     const efficiencyRate = row.efficiencyRate ?? (row.buildingArea ? row.saleArea / row.buildingArea : 0);
     const saleArea = kind === "销售" ? round(row.buildingArea * efficiencyRate) : 0;
     const governmentArea = kind === "给政府" ? round(row.buildingArea) : 0;
-    return { ...row, kind, efficiencyRate, saleArea, governmentArea };
+    const normalized = { ...row, kind, efficiencyRate, saleArea, governmentArea };
+    const collection = kind === "销售" ? { ...defaultCollectionLogic(normalized), deliveryMonth: projectDeliveryMonth } : row.collection;
+    return { ...normalized, collection };
   });
   const revenues = new Map(normalizedRows.map(row => [row.id, round(row.saleArea * row.salePrice / 10000)]));
   const governmentMode = normalizedRows.some(row => row.kind === "给政府");
