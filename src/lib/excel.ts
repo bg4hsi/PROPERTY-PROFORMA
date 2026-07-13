@@ -1,5 +1,5 @@
 import { AssetKind, AssetRow, HoldingReturn, ProjectInfo, Scenario } from "@/types";
-import { defaultCollectionLogic, normalizeAssetKind } from "@/lib/calculationEngine";
+import { calculateProject, defaultCollectionLogic, normalizeAssetKind } from "@/lib/calculationEngine";
 
 type SheetRow = Record<string, unknown>;
 
@@ -195,6 +195,7 @@ function parseScenarioInfo(workbook: { Sheets: Record<string, unknown> }, XLSX: 
 
 export async function exportExcel(scenario: Scenario) {
   const XLSX = await import("xlsx");
+  const calculatedRows = calculateProject(scenario.rows, scenario.project, []).rows;
   const scenarioSheet = XLSX.utils.json_to_sheet([
     { 字段: "方案名称", 数值: scenario.name },
     { 字段: "项目名称", 数值: scenario.project.name },
@@ -206,18 +207,21 @@ export async function exportExcel(scenario: Scenario) {
     名称: projectLabels[key],
     数值: scenario.project[key] ?? ""
   })));
-  const inputSheet = XLSX.utils.json_to_sheet(scenario.rows.map(row => {
+  const inputSheet = XLSX.utils.json_to_sheet(calculatedRows.map(row => {
     const kind = normalizeAssetKind(row);
     const efficiencyRate = row.efficiencyRate ?? (row.buildingArea ? row.saleArea / row.buildingArea : 0);
     const saleArea = kind === "销售" ? row.buildingArea * efficiencyRate : 0;
     const normalizedRow = { ...row, kind, efficiencyRate, saleArea };
     const logic = defaultCollectionLogic(normalizedRow, scenario.project);
     const isOtherHolding = kind === "其他自持";
+    const areaInput = saleArea > 0
+      ? { "销售面积（平方米）": saleArea }
+      : { "得房率": efficiencyRate };
     return {
       "业态": row.name,
       "类型": kind,
       "建筑面积（平方米）": row.buildingArea,
-      "得房率": efficiencyRate,
+      ...areaInput,
       "销售单价（元/平方米）": row.salePrice,
       "单方成本（元/平方米）": row.unitCost,
       "总套数/客房数": row.unitCount ?? "",
@@ -258,9 +262,13 @@ export async function importExcel(file: File, current: Scenario): Promise<Scenar
       }
     }
     const rawRate = "得房率" in item ? asNumber(item["得房率"]) : undefined;
+    const inputSaleArea = asNumber(item["销售面积（平方米）"]);
     const normalizedRate = rawRate === undefined ? undefined : rawRate > 1 ? rawRate / 100 : rawRate;
     const hasPositiveRate = (normalizedRate ?? 0) > 0;
-    if (hasPositiveRate) {
+    if (next.kind === "销售" && inputSaleArea > 0 && next.buildingArea > 0) {
+      next.efficiencyRate = inputSaleArea / next.buildingArea;
+      next.saleArea = next.buildingArea * next.efficiencyRate;
+    } else if (hasPositiveRate) {
       next.efficiencyRate = normalizedRate;
       next.saleArea = next.kind === "销售" ? next.buildingArea * (next.efficiencyRate || 0) : 0;
     } else {
