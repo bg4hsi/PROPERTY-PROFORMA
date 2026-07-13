@@ -7,10 +7,7 @@ const assetHeaders: Record<string, keyof AssetRow> = {
   "业态": "name",
   "类型": "kind",
   "建筑面积（平方米）": "buildingArea",
-  "给政府面积（平方米）": "governmentArea",
-  "分配政府面积（平方米）": "governmentArea",
   "得房率": "efficiencyRate",
-  "销售面积（平方米）": "saleArea",
   "销售单价（元/平方米）": "salePrice",
   "单方成本（元/平方米）": "unitCost",
   "总套数/客房数": "unitCount",
@@ -57,7 +54,7 @@ const projectLabelToKey = Object.fromEntries(
 ) as Record<string, keyof ProjectInfo>;
 
 const projectNumberKeys = new Set<keyof ProjectInfo>([
-  "landArea", "landTotalPrice", "totalBuildingArea", "saleableArea", "heldArea", "governmentArea",
+  "landArea", "landTotalPrice",
   "vatRate", "managementRate", "salesRate", "shareholderInterestRate",
   "collectionDownPaymentRate", "collectionMonthlyRate", "collectionTailInstallmentMonths",
   "fullPaymentRate", "fullPaymentDiscountRate", "deliveryMonth", "trialOperationMonths",
@@ -66,6 +63,7 @@ const projectNumberKeys = new Set<keyof ProjectInfo>([
   "hotelOccupancyRate", "commercialOccupancyRate", "annualOperatingCostRate", "holdingDiscountRate"
 ]);
 const projectBooleanKeys = new Set<keyof ProjectInfo>(["includeHoldingReturns"]);
+const projectStringKeys = new Set<keyof ProjectInfo>(["name", "location", "currencyUnit"]);
 const exportProjectKeys: Array<keyof ProjectInfo> = [
   "name",
   "location",
@@ -179,7 +177,7 @@ function parseProject(workbook: { Sheets: Record<string, unknown> }, XLSX: typeo
     } else if (projectNumberKeys.has(key)) {
       const parsed = asOptionalNumber(value);
       if (parsed !== undefined) (project as unknown as Record<string, unknown>)[key] = parsed;
-    } else if (value !== "" && value !== undefined && value !== null) {
+    } else if (projectStringKeys.has(key) && value !== "" && value !== undefined && value !== null) {
       (project as unknown as Record<string, unknown>)[key] = String(value);
     }
   }
@@ -210,14 +208,16 @@ export async function exportExcel(scenario: Scenario) {
   })));
   const inputSheet = XLSX.utils.json_to_sheet(scenario.rows.map(row => {
     const kind = normalizeAssetKind(row);
-    const logic = defaultCollectionLogic(row, scenario.project);
+    const efficiencyRate = row.efficiencyRate ?? (row.buildingArea ? row.saleArea / row.buildingArea : 0);
+    const saleArea = kind === "销售" ? row.buildingArea * efficiencyRate : 0;
+    const normalizedRow = { ...row, kind, efficiencyRate, saleArea };
+    const logic = defaultCollectionLogic(normalizedRow, scenario.project);
     const isOtherHolding = kind === "其他自持";
     return {
       "业态": row.name,
       "类型": kind,
       "建筑面积（平方米）": row.buildingArea,
-      "得房率": row.efficiencyRate ?? (row.buildingArea ? row.saleArea / row.buildingArea : 0),
-      "销售面积（平方米）": row.saleArea,
+      "得房率": efficiencyRate,
       "销售单价（元/平方米）": row.salePrice,
       "单方成本（元/平方米）": row.unitCost,
       "总套数/客房数": row.unitCount ?? "",
@@ -257,16 +257,15 @@ export async function importExcel(file: File, current: Scenario): Promise<Scenar
         (next as unknown as Record<string, unknown>)[key] = asNumber(raw);
       }
     }
-    const hasSaleArea = item["销售面积（平方米）"] !== "" && item["销售面积（平方米）"] !== null && item["销售面积（平方米）"] !== undefined;
-    if (hasSaleArea) {
-      next.saleArea = asNumber(item["销售面积（平方米）"]);
-      next.efficiencyRate = next.buildingArea ? next.saleArea / next.buildingArea : 0;
-    } else if ("得房率" in item) {
-      const rawRate = asNumber(item["得房率"]);
-      next.efficiencyRate = rawRate > 1 ? rawRate / 100 : rawRate;
-      next.saleArea = next.buildingArea * (next.efficiencyRate || 0);
+    const rawRate = "得房率" in item ? asNumber(item["得房率"]) : undefined;
+    const normalizedRate = rawRate === undefined ? undefined : rawRate > 1 ? rawRate / 100 : rawRate;
+    const hasPositiveRate = (normalizedRate ?? 0) > 0;
+    if (hasPositiveRate) {
+      next.efficiencyRate = normalizedRate;
+      next.saleArea = next.kind === "销售" ? next.buildingArea * (next.efficiencyRate || 0) : 0;
     } else {
-      next.efficiencyRate = next.buildingArea ? next.saleArea / next.buildingArea : 0;
+      next.saleArea = 0;
+      next.efficiencyRate = 0;
     }
     const fallback = defaultCollectionLogic(next, project);
     next.collection = next.kind === "销售" ? {
