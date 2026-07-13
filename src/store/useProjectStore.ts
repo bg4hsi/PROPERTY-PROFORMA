@@ -40,6 +40,7 @@ const createBlankScenario = (): Scenario => ({
     hotelOccupancyRate: 0.7,
     commercialOccupancyRate: 0.85,
     annualOperatingCostRate: 0.35,
+    holdingDiscountRate: 0.08,
     currencyUnit: "万元",
     includeHoldingReturns: false
   },
@@ -56,7 +57,7 @@ interface Store {
   addRow: () => void; duplicateRow: (id: string) => void; deleteRow: (id: string) => void; reorderRow: (sourceId: string, targetId: string) => void;
   addAllocation: (rule: Omit<AllocationRule, "id">) => void; deleteAllocation: (id: string) => void;
   createScenario: () => void; duplicateScenario: () => void; deleteScenario: () => void;
-  renameScenario: (name: string) => void; setActive: (id: string) => void; replaceActive: (scenario: Scenario) => void;
+  renameScenario: (name: string) => void; setActive: (id: string) => void; replaceActive: (scenario: Scenario) => void; importScenario: (scenario: Scenario) => void;
   undo: () => void;
 }
 
@@ -67,6 +68,14 @@ const snapshot = (state: Pick<Store, "scenarios" | "activeId">): UndoSnapshot =>
 const pushUndo = (state: Store) => [...state.undoStack, snapshot(state)].slice(-50);
 const projectDefaults: ProjectInfo = createBlankScenario().project;
 const normalizeProject = (project: ProjectInfo): ProjectInfo => ({ ...projectDefaults, ...project });
+const uniqueScenarioName = (baseName: string, scenarios: Scenario[]) => {
+  const cleanName = baseName.trim() || "导入方案";
+  const used = new Set(scenarios.flatMap(scenario => [scenario.name, scenario.project.name].filter(Boolean)));
+  if (!used.has(cleanName)) return cleanName;
+  let index = 2;
+  while (used.has(`${cleanName} (${index})`)) index += 1;
+  return `${cleanName} (${index})`;
+};
 const normalizeScenario = (scenario: Scenario): Scenario => ({
   ...scenario,
   project: normalizeProject(scenario.project),
@@ -74,6 +83,8 @@ const normalizeScenario = (scenario: Scenario): Scenario => ({
     const project = normalizeProject(scenario.project);
     return {
       ...row,
+      manualManagementFee: null,
+      manualSalesFee: null,
       collection: row.collection ? {
         ...row.collection,
         downPaymentRate: project.collectionDownPaymentRate ?? .3,
@@ -126,6 +137,11 @@ export const useProjectStore = create<Store>()(persist((set, get) => ({
   renameScenario: name => set(state => updateActive(state, s => ({ ...s, name, project: { ...s.project, name } }))),
   setActive: activeId => set({ activeId }),
   replaceActive: scenario => set(state => ({ scenarios: state.scenarios.map(s => s.id === state.activeId ? { ...scenario, id: state.activeId } : s), undoStack: pushUndo(state) })),
+  importScenario: scenario => set(state => {
+    const name = uniqueScenarioName(scenario.project.name || scenario.name, state.scenarios);
+    const next = normalizeScenario({ ...scenario, id: uid(), name, project: { ...scenario.project, name }, updatedAt: new Date().toISOString() });
+    return { scenarios: [...state.scenarios, next], activeId: next.id, undoStack: pushUndo(state) };
+  }),
   undo: () => set(state => {
     const previous = state.undoStack[state.undoStack.length - 1];
     if (!previous) return state;

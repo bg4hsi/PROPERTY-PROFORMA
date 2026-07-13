@@ -40,6 +40,8 @@ export interface ProjectInfo {
   hotelOccupancyRate: number;
   commercialOccupancyRate: number;
   annualOperatingCostRate: number;
+  /** 自持业态 NPV 统一折现率。 */
+  holdingDiscountRate: number;
   currencyUnit: CurrencyUnit;
   includeHoldingReturns: boolean;
 }

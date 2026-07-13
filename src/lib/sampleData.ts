@@ -20,7 +20,7 @@ export const sampleScenario: Scenario = {
     hotelAverageDailyRate: 800, fourStarHotelAverageDailyRate: 600, fiveStarHotelAverageDailyRate: 900,
     fourStarHotelOpeningCost: 0, fiveStarHotelOpeningCost: 0, mallOpeningCost: 0,
     commercialMonthlyRent: 150, hotelOccupancyRate: .7, commercialOccupancyRate: .85,
-    annualOperatingCostRate: .35,
+    annualOperatingCostRate: .35, holdingDiscountRate: .08,
     currencyUnit: "万元", includeHoldingReturns: false
   },
   rows: [

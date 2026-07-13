@@ -9,14 +9,15 @@ export function ProjectSettings({ project, rows, landModel, updateProject }: {
   landModel: boolean;
   updateProject: (patch: Partial<ProjectInfo>) => void;
 }) {
-  const rateDefault = (key: "vatRate"|"managementRate"|"salesRate"|"shareholderInterestRate"|"annualOperatingCostRate"|"collectionDownPaymentRate"|"collectionMonthlyRate"|"fullPaymentRate"|"fullPaymentDiscountRate") => {
+  const rateDefault = (key: "vatRate"|"managementRate"|"salesRate"|"shareholderInterestRate"|"annualOperatingCostRate"|"holdingDiscountRate"|"collectionDownPaymentRate"|"collectionMonthlyRate"|"fullPaymentRate"|"fullPaymentDiscountRate") => {
     if (key === "annualOperatingCostRate") return .35;
+    if (key === "holdingDiscountRate") return .08;
     if (key === "shareholderInterestRate") return .08;
     if (key === "collectionDownPaymentRate") return .3;
     if (key === "collectionMonthlyRate") return .05;
     return 0;
   };
-  const rateField = (label: string, key: "vatRate"|"managementRate"|"salesRate"|"shareholderInterestRate"|"annualOperatingCostRate"|"collectionDownPaymentRate"|"collectionMonthlyRate"|"fullPaymentRate"|"fullPaymentDiscountRate") => <label><span className="label">{label}</span><div className="relative"><input className="field h-11 !pr-10" type="number" min="0" max="100" step="0.1" value={Number(((project[key] ?? rateDefault(key))*100).toFixed(2))} onChange={e=>updateProject({[key]:Math.max(0,Math.min(100,Number(e.target.value)))/100})}/><span className="pointer-events-none absolute right-3 top-1/2 w-3 -translate-y-1/2 text-center text-sm text-slate-400">%</span></div></label>;
+  const rateField = (label: string, key: "vatRate"|"managementRate"|"salesRate"|"shareholderInterestRate"|"annualOperatingCostRate"|"holdingDiscountRate"|"collectionDownPaymentRate"|"collectionMonthlyRate"|"fullPaymentRate"|"fullPaymentDiscountRate") => <label><span className="label">{label}</span><div className="relative"><input className="field h-11 !pr-10" type="number" min="0" max="100" step="0.1" value={Number(((project[key] ?? rateDefault(key))*100).toFixed(2))} onChange={e=>updateProject({[key]:Math.max(0,Math.min(100,Number(e.target.value)))/100})}/><span className="pointer-events-none absolute right-3 top-1/2 w-3 -translate-y-1/2 text-center text-sm text-slate-400">%</span></div></label>;
   const deliveryMonth = project.deliveryMonth || 24;
   const trialOperationMonths = project.trialOperationMonths ?? 3;
   const hasMall = rows.some(row => /MALL/i.test(row.name));
@@ -34,6 +35,7 @@ export function ProjectSettings({ project, rows, landModel, updateProject }: {
         <label><span className="label">交付月</span><input aria-label="项目交付月" className="field h-11" type="number" min="1" max={PROJECTION_MONTHS} value={deliveryMonth} onChange={e=>updateProject({deliveryMonth:Math.max(1,Math.min(PROJECTION_MONTHS,Number(e.target.value)))})}/></label>
         <label><span className="label">试营业（月）</span><input aria-label="试营业月数" className="field h-11" type="number" min="0" max="120" value={trialOperationMonths} onChange={e=>updateProject({trialOperationMonths:Math.max(0,Math.min(120,Number(e.target.value)))})}/></label>
         {rateField("年经营成本占比","annualOperatingCostRate")}
+        {rateField("自持折现率","holdingDiscountRate")}
         <label><span className="label">四星级酒店单客房平均每晚房价（元）</span><input className="field h-11" type="number" min="0" value={project.fourStarHotelAverageDailyRate ?? project.hotelAverageDailyRate ?? 600} onChange={e=>updateProject({fourStarHotelAverageDailyRate:Number(e.target.value)})}/></label>
         <label><span className="label">五星级酒店单客房平均每晚房价（元）</span><input className="field h-11" type="number" min="0" value={project.fiveStarHotelAverageDailyRate ?? project.hotelAverageDailyRate ?? 900} onChange={e=>updateProject({fiveStarHotelAverageDailyRate:Number(e.target.value)})}/></label>
         <label><span className="label">四星级酒店开办费（元/建筑㎡）</span><input className="field h-11" type="number" min="0" value={project.fourStarHotelOpeningCost ?? 0} onChange={e=>updateProject({fourStarHotelOpeningCost:Number(e.target.value)})}/></label>

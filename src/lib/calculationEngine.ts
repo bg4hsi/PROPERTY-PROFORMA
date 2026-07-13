@@ -92,8 +92,8 @@ export function calculateRows(rows: AssetRow[], project: ProjectInfo, _allocatio
     const rowLandUnitBasis = governmentMode || row.kind === "销售" ? row.saleArea : row.buildingArea;
     const allocatedLandUnitCost = rowLandUnitBasis > 0 ? round(allocatedLandCost * 10000 / rowLandUnitBasis) : 0;
     const managementBase = isSaleable ? revenue : totalConstructionCost;
-    const managementFee = round(row.manualManagementFee ?? managementBase * project.managementRate);
-    const salesFee = isSaleable ? round(row.manualSalesFee ?? revenue * project.salesRate) : 0;
+    const managementFee = round(managementBase * project.managementRate);
+    const salesFee = isSaleable ? round(revenue * project.salesRate) : 0;
     const vat = round(project.vatRate > 0 ? revenue / (1 + project.vatRate) * project.vatRate : 0);
     // 股东计息依赖项目逐月资金缺口，在 calculateProject 中统一计算后再分摊到各业态。
     const shareholderInterest = 0;
@@ -117,7 +117,7 @@ export function calculateRows(rows: AssetRow[], project: ProjectInfo, _allocatio
       ...(isHotel ? { roomCount, annualRent: 0, annualOperatingIncome: round(roomCount * hotelAverageDailyRate * (project.hotelOccupancyRate ?? .7) * 365 / 10000) } : {}),
       ...(isCommercial ? { annualRent: round(rentableArea * (project.commercialMonthlyRent ?? 150) * (project.commercialOccupancyRate ?? .85) * 12 / 10000), annualOperatingIncome: 0 } : {})
     } : undefined;
-    const holding = holdingIncome ? { ...holdingIncome, annualOperatingCost: round((holdingIncome.annualRent + holdingIncome.annualOperatingIncome) * (project.annualOperatingCostRate ?? .35)) } : undefined;
+    const holding = holdingIncome ? { ...holdingIncome, discountRate: project.holdingDiscountRate ?? .08, annualOperatingCost: round((holdingIncome.annualRent + holdingIncome.annualOperatingIncome) * (project.annualOperatingCostRate ?? .35)) } : undefined;
     const annualNetCashFlow = holding ? round(holding.annualRent + holding.annualOperatingIncome - holding.annualOperatingCost) : 0;
     const holdingInvestmentCost = round(totalConstructionCost + openingCost + (governmentMode ? 0 : allocatedLandCost));
     const paybackPeriod = holding && annualNetCashFlow > 0 ? round(holdingInvestmentCost / annualNetCashFlow) : null;
