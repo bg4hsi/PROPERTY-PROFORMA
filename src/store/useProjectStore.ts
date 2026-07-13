@@ -26,6 +26,8 @@ const createBlankScenario = (): Scenario => ({
     collectionDownPaymentRate: 0.3,
     collectionMonthlyRate: 0.05,
     collectionTailInstallmentMonths: 3,
+    fullPaymentRate: 0,
+    fullPaymentDiscountRate: 0,
     deliveryMonth: 24,
     trialOperationMonths: 3,
     hotelAverageDailyRate: 800,

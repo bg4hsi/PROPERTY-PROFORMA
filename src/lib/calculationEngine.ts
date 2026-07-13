@@ -2,6 +2,7 @@ import { AllocationRule, AssetKind, AssetRow, CalculatedRow, ProjectInfo, Projec
 
 const safe = (n: number) => (Number.isFinite(n) ? n : 0);
 const round = (n: number) => Math.round((safe(n) + Number.EPSILON) * 10000) / 10000;
+const clampRate = (value: number | undefined, fallback = 0) => Math.max(0, Math.min(1, value ?? fallback));
 export const PROJECTION_MONTHS = 60;
 
 /** 地库、地下空间、车位和停车业态均不参与土地分摊及自持经营回报。 */
@@ -50,7 +51,10 @@ export function calculateRows(rows: AssetRow[], project: ProjectInfo, _allocatio
     const collection = kind === "销售" ? { ...defaultCollectionLogic(normalized, project), deliveryMonth: projectDeliveryMonth } : row.collection;
     return { ...normalized, collection };
   });
-  const revenues = new Map(normalizedRows.map(row => [row.id, round(row.saleArea * row.salePrice / 10000)]));
+  const fullPaymentRate = clampRate(project.fullPaymentRate);
+  const fullPaymentDiscountRate = clampRate(project.fullPaymentDiscountRate);
+  const fullPaymentDiscountFactor = 1 - fullPaymentRate * fullPaymentDiscountRate;
+  const revenues = new Map(normalizedRows.map(row => [row.id, round(row.saleArea * row.salePrice * fullPaymentDiscountFactor / 10000)]));
   const governmentMode = normalizedRows.some(row => row.kind === "给政府");
   const governmentCostPool = round(normalizedRows.reduce((total, row) => total + (row.kind === "给政府" ? row.buildingArea * row.unitCost / 10000 : 0), 0));
   const saleableBuildingArea = normalizedRows.reduce((total, row) => total + (row.kind === "销售" ? row.buildingArea : 0), 0);
@@ -217,7 +221,7 @@ export interface CollectionSchedule {
   rows: RowCollectionProjection[];
 }
 
-type CollectionProjectSettings = Pick<ProjectInfo, "collectionDownPaymentRate" | "collectionMonthlyRate" | "collectionTailInstallmentMonths">;
+type CollectionProjectSettings = Pick<ProjectInfo, "collectionDownPaymentRate" | "collectionMonthlyRate" | "collectionTailInstallmentMonths" | "fullPaymentRate" | "fullPaymentDiscountRate">;
 
 export function defaultCollectionLogic(row: AssetRow, project: CollectionProjectSettings) {
   const downPaymentRate = project.collectionDownPaymentRate ?? .3;
@@ -231,6 +235,9 @@ export function defaultCollectionLogic(row: AssetRow, project: CollectionProject
 }
 
 export function calculateCollectionSchedule(rows: CalculatedRow[], months: number, project: CollectionProjectSettings): CollectionSchedule {
+  const fullPaymentRate = clampRate(project.fullPaymentRate);
+  const fullPaymentDiscountRate = clampRate(project.fullPaymentDiscountRate);
+  const fullPaymentDiscountFactor = Math.max(0.000001, 1 - fullPaymentRate * fullPaymentDiscountRate);
   const totalMonthlySales = Array(months).fill(0) as number[];
   const totalMonthlyCollection = Array(months).fill(0) as number[];
   const projections = rows.map(row => {
@@ -244,11 +251,14 @@ export function calculateCollectionSchedule(rows: CalculatedRow[], months: numbe
         const units = Math.min(logic.monthlyAbsorptionUnits, remainingUnits);
         remainingUnits -= units;
         const cohortSales = row.revenue * units / logic.totalUnits;
+        const grossCohortSales = cohortSales / fullPaymentDiscountFactor;
+        const fullPaymentSales = grossCohortSales * fullPaymentRate * (1 - fullPaymentDiscountRate);
+        const installmentSales = grossCohortSales * (1 - fullPaymentRate);
         monthlySoldUnits[saleMonth - 1] += units;
         monthlySales[saleMonth - 1] += cohortSales;
-        let remainingPayment = cohortSales;
-        const downPayment = Math.min(remainingPayment, cohortSales * logic.downPaymentRate);
-        monthlyCollection[saleMonth - 1] += downPayment;
+        let remainingPayment = installmentSales;
+        const downPayment = Math.min(remainingPayment, installmentSales * logic.downPaymentRate);
+        monthlyCollection[saleMonth - 1] += fullPaymentSales + downPayment;
         remainingPayment -= downPayment;
         const readyMonth = Math.max(saleMonth + 1, logic.deliveryMonth || saleMonth + 1);
         for (let month = saleMonth + 1; month < readyMonth && month <= months && remainingPayment > 0; month++) {

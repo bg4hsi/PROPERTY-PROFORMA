@@ -22,6 +22,10 @@ export interface ProjectInfo {
   collectionMonthlyRate?: number;
   /** 销售回款统一口径：尾款分期月数。 */
   collectionTailInstallmentMonths?: number;
+  /** 每月销售中选择全款支付的比例。 */
+  fullPaymentRate?: number;
+  /** 客户选择全款支付时的总价优惠比例。 */
+  fullPaymentDiscountRate?: number;
   deliveryMonth: number;
   trialOperationMonths: number;
   /** 旧方案兼容字段，新方案使用四星/五星价格。 */
