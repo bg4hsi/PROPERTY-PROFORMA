@@ -44,10 +44,27 @@ async function saveStats(stats: PageViewStats) {
   await rename(temporaryFile, dataFile);
 }
 
+function cleanIp(value: string | null) {
+  if (!value) return "";
+  return value.trim().replace(/^::ffff:/, "");
+}
+
+function displayIp(value: string) {
+  if (["::1", "127.0.0.1", "localhost"].includes(value)) return "本机访问";
+  return value || "本机/未知";
+}
+
 function getClientIp(request: NextRequest) {
-  const forwarded = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
-  const realIp = request.headers.get("x-real-ip")?.trim();
-  return forwarded || realIp || "本机/未知";
+  const candidates = [
+    ...(request.headers.get("x-forwarded-for") || "").split(","),
+    request.headers.get("x-real-ip"),
+    request.headers.get("cf-connecting-ip"),
+    request.headers.get("true-client-ip"),
+    request.headers.get("x-client-ip"),
+    request.headers.get("x-vercel-forwarded-for")
+  ].map(cleanIp).filter(Boolean);
+  const preferred = candidates.find(ip => !["::1", "127.0.0.1", "localhost"].includes(ip)) || candidates[0] || "";
+  return displayIp(preferred);
 }
 
 export async function GET() {
