@@ -9,15 +9,16 @@ export function ProjectSettings({ project, rows, landModel, updateProject }: {
   landModel: boolean;
   updateProject: (patch: Partial<ProjectInfo>) => void;
 }) {
-  const rateDefault = (key: "vatRate"|"managementRate"|"salesRate"|"shareholderInterestRate"|"annualOperatingCostRate"|"holdingDiscountRate"|"collectionDownPaymentRate"|"collectionMonthlyRate"|"fullPaymentRate"|"fullPaymentDiscountRate") => {
+  const rateDefault = (key: "vatRate"|"managementRate"|"salesRate"|"shareholderInterestRate"|"annualOperatingCostRate"|"holdingDiscountRate"|"collectionDownPaymentRate"|"collectionMonthlyRate"|"collectionPreDeliveryPaymentRate"|"fullPaymentRate"|"fullPaymentDiscountRate") => {
     if (key === "annualOperatingCostRate") return .35;
     if (key === "holdingDiscountRate") return .08;
     if (key === "shareholderInterestRate") return .08;
     if (key === "collectionDownPaymentRate") return .3;
     if (key === "collectionMonthlyRate") return .05;
+    if (key === "collectionPreDeliveryPaymentRate") return .8;
     return 0;
   };
-  const rateField = (label: string, key: "vatRate"|"managementRate"|"salesRate"|"shareholderInterestRate"|"annualOperatingCostRate"|"holdingDiscountRate"|"collectionDownPaymentRate"|"collectionMonthlyRate"|"fullPaymentRate"|"fullPaymentDiscountRate") => <label><span className="label">{label}</span><div className="relative"><input className="field h-11 !pr-10" type="number" min="0" max="100" step="0.1" value={Number(((project[key] ?? rateDefault(key))*100).toFixed(2))} onChange={e=>updateProject({[key]:Math.max(0,Math.min(100,Number(e.target.value)))/100})}/><span className="pointer-events-none absolute right-3 top-1/2 w-3 -translate-y-1/2 text-center text-sm text-slate-400">%</span></div></label>;
+  const rateField = (label: string, key: "vatRate"|"managementRate"|"salesRate"|"shareholderInterestRate"|"annualOperatingCostRate"|"holdingDiscountRate"|"collectionDownPaymentRate"|"collectionMonthlyRate"|"collectionPreDeliveryPaymentRate"|"fullPaymentRate"|"fullPaymentDiscountRate") => <label><span className="label">{label}</span><div className="relative"><input className="field h-11 !pr-10" type="number" min="0" max="100" step="0.1" value={Number(((project[key] ?? rateDefault(key))*100).toFixed(2))} onChange={e=>updateProject({[key]:Math.max(0,Math.min(100,Number(e.target.value)))/100})}/><span className="pointer-events-none absolute right-3 top-1/2 w-3 -translate-y-1/2 text-center text-sm text-slate-400">%</span></div></label>;
   const deliveryMonth = project.deliveryMonth || 24;
   const trialOperationMonths = project.trialOperationMonths ?? 3;
   const hasMall = rows.some(row => /MALL/i.test(row.name));
@@ -27,6 +28,7 @@ export function ProjectSettings({ project, rows, landModel, updateProject }: {
         {rateField("股东计息利率","shareholderInterestRate")}
         {rateField("首付款比例","collectionDownPaymentRate")}
         {rateField("月回款比例","collectionMonthlyRate")}
+        {rateField("竣备前支付比例","collectionPreDeliveryPaymentRate")}
         {rateField("全款比例","fullPaymentRate")}
         {rateField("全款优惠比例","fullPaymentDiscountRate")}
         <label><span className="label">尾款分期（月）</span><input aria-label="尾款分期月数" className="field h-11" type="number" min="0" max={PROJECTION_MONTHS} value={project.collectionTailInstallmentMonths ?? 3} onChange={e=>updateProject({collectionTailInstallmentMonths:Math.max(0,Math.min(PROJECTION_MONTHS,Number(e.target.value)))})}/></label>

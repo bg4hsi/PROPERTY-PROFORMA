@@ -221,7 +221,7 @@ export interface CollectionSchedule {
   rows: RowCollectionProjection[];
 }
 
-type CollectionProjectSettings = Pick<ProjectInfo, "collectionDownPaymentRate" | "collectionMonthlyRate" | "collectionTailInstallmentMonths" | "fullPaymentRate" | "fullPaymentDiscountRate">;
+type CollectionProjectSettings = Pick<ProjectInfo, "collectionDownPaymentRate" | "collectionMonthlyRate" | "collectionPreDeliveryPaymentRate" | "collectionTailInstallmentMonths" | "fullPaymentRate" | "fullPaymentDiscountRate">;
 
 export function defaultCollectionLogic(row: AssetRow, project: CollectionProjectSettings) {
   const downPaymentRate = project.collectionDownPaymentRate ?? .3;
@@ -237,6 +237,7 @@ export function defaultCollectionLogic(row: AssetRow, project: CollectionProject
 export function calculateCollectionSchedule(rows: CalculatedRow[], months: number, project: CollectionProjectSettings): CollectionSchedule {
   const fullPaymentRate = clampRate(project.fullPaymentRate);
   const fullPaymentDiscountRate = clampRate(project.fullPaymentDiscountRate);
+  const preDeliveryPaymentRate = clampRate(project.collectionPreDeliveryPaymentRate, .8);
   const fullPaymentDiscountFactor = Math.max(0.000001, 1 - fullPaymentRate * fullPaymentDiscountRate);
   const totalMonthlySales = Array(months).fill(0) as number[];
   const totalMonthlyCollection = Array(months).fill(0) as number[];
@@ -257,14 +258,21 @@ export function calculateCollectionSchedule(rows: CalculatedRow[], months: numbe
         monthlySoldUnits[saleMonth - 1] += units;
         monthlySales[saleMonth - 1] += cohortSales;
         let remainingPayment = installmentSales;
-        const downPayment = Math.min(remainingPayment, installmentSales * logic.downPaymentRate);
+        const deliveryMonth = logic.deliveryMonth || saleMonth + 1;
+        const readyMonth = Math.max(saleMonth + 1, deliveryMonth);
+        const beforeDeliveryCap = saleMonth < deliveryMonth ? installmentSales * preDeliveryPaymentRate : installmentSales;
+        let beforeDeliveryCollected = 0;
+        const downPayment = Math.min(remainingPayment, installmentSales * logic.downPaymentRate, beforeDeliveryCap);
         monthlyCollection[saleMonth - 1] += fullPaymentSales + downPayment;
         remainingPayment -= downPayment;
-        const readyMonth = Math.max(saleMonth + 1, logic.deliveryMonth || saleMonth + 1);
+        beforeDeliveryCollected += downPayment;
         for (let month = saleMonth + 1; month < readyMonth && month <= months && remainingPayment > 0; month++) {
-          const progressPayment = Math.min(remainingPayment, cohortSales * logic.monthlyCollectionRate);
+          const remainingBeforeDeliveryCap = Math.max(0, beforeDeliveryCap - beforeDeliveryCollected);
+          if (remainingBeforeDeliveryCap <= 0) break;
+          const progressPayment = Math.min(remainingPayment, cohortSales * logic.monthlyCollectionRate, remainingBeforeDeliveryCap);
           monthlyCollection[month - 1] += progressPayment;
           remainingPayment -= progressPayment;
+          beforeDeliveryCollected += progressPayment;
         }
         if (remainingPayment > 0) {
           const installments = Math.max(1, logic.tailInstallmentMonths || 1);

@@ -25,6 +25,7 @@ const createBlankScenario = (): Scenario => ({
     shareholderInterestRate: 0.08,
     collectionDownPaymentRate: 0.3,
     collectionMonthlyRate: 0.05,
+    collectionPreDeliveryPaymentRate: 0.8,
     collectionTailInstallmentMonths: 3,
     fullPaymentRate: 0,
     fullPaymentDiscountRate: 0,

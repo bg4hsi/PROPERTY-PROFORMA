@@ -15,7 +15,7 @@ export const sampleScenario: Scenario = {
     name: "城市商业综合体项目", location: "示例城市核心区", landArea: 22550, landTotalPrice: 20000,
     totalBuildingArea: 90200, saleableArea: 18240, heldArea: 53940, governmentArea: 18020,
     vatRate: 0.15, managementRate: 0.02, salesRate: 0.05, shareholderInterestRate: 0.08, deliveryMonth: 24, trialOperationMonths: 3,
-    collectionDownPaymentRate: .3, collectionMonthlyRate: .05, collectionTailInstallmentMonths: 3,
+    collectionDownPaymentRate: .3, collectionMonthlyRate: .05, collectionPreDeliveryPaymentRate: .8, collectionTailInstallmentMonths: 3,
     fullPaymentRate: 0, fullPaymentDiscountRate: 0,
     hotelAverageDailyRate: 800, fourStarHotelAverageDailyRate: 600, fiveStarHotelAverageDailyRate: 900,
     fourStarHotelOpeningCost: 0, fiveStarHotelOpeningCost: 0, mallOpeningCost: 0,

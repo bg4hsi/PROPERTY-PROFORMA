@@ -20,6 +20,8 @@ export interface ProjectInfo {
   collectionDownPaymentRate?: number;
   /** 销售回款统一口径：月回款比例。 */
   collectionMonthlyRate?: number;
+  /** 销售回款统一口径：竣备前非全款客户累计支付上限。 */
+  collectionPreDeliveryPaymentRate?: number;
   /** 销售回款统一口径：尾款分期月数。 */
   collectionTailInstallmentMonths?: number;
   /** 每月销售中选择全款支付的比例。 */
