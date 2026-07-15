@@ -28,11 +28,14 @@ export function DeliveryFundingSensitivity({ rows, project }: { rows: AssetRow[]
         salesRate: adjustedProject.salesRate,
         vatRate: adjustedProject.vatRate
       }).summary;
-      const cashFlow = calculateCashFlowProjection(summary, PROJECTION_MONTHS, schedule, deliveryMonth, adjustedProject.trialOperationMonths ?? 3);
-      const fullCashFlow = calculateCashFlowProjection({ ...summary, includeHoldingReturns: true }, PROJECTION_MONTHS, schedule, deliveryMonth, adjustedProject.trialOperationMonths ?? 3);
+      const cashFlow = calculateCashFlowProjection(summary, PROJECTION_MONTHS, schedule, deliveryMonth, adjustedProject.trialOperationMonths ?? 3, result.rows, adjustedProject);
+      const fullCashFlow = calculateCashFlowProjection({ ...summary, includeHoldingReturns: true }, PROJECTION_MONTHS, schedule, deliveryMonth, adjustedProject.trialOperationMonths ?? 3, result.rows, adjustedProject);
+      const constructionEndMonth = result.rows.some(row => row.name.includes("二期"))
+        ? Math.max(deliveryMonth, adjustedProject.phase2DeliveryMonth || 48)
+        : deliveryMonth;
       return {
         deliveryMonth,
-        constructionPeak: fundingPeak(cashFlow, deliveryMonth),
+        constructionPeak: fundingPeak(cashFlow, constructionEndMonth),
         fullPeak: fundingPeak(fullCashFlow),
         shareholderInterest: result.summary.shareholderInterest,
         netProfit: result.summary.netProfitExcludingHoldingReturns,

@@ -20,8 +20,11 @@ export function ProjectSettings({ project, rows, landModel, updateProject }: {
   };
   const rateField = (label: string, key: "vatRate"|"managementRate"|"salesRate"|"shareholderInterestRate"|"annualOperatingCostRate"|"holdingDiscountRate"|"collectionDownPaymentRate"|"collectionMonthlyRate"|"collectionPreDeliveryPaymentRate"|"fullPaymentRate"|"fullPaymentDiscountRate") => <label><span className="label">{label}</span><div className="relative"><input className="field h-11 !pr-10" type="number" min="0" max="100" step="0.1" value={Number(((project[key] ?? rateDefault(key))*100).toFixed(2))} onChange={e=>updateProject({[key]:Math.max(0,Math.min(100,Number(e.target.value)))/100})}/><span className="pointer-events-none absolute right-3 top-1/2 w-3 -translate-y-1/2 text-center text-sm text-slate-400">%</span></div></label>;
   const deliveryMonth = project.deliveryMonth || 24;
+  const phase2StartMonth = project.phase2StartMonth || Math.min(PROJECTION_MONTHS, deliveryMonth + 1);
+  const phase2DeliveryMonth = project.phase2DeliveryMonth || Math.min(PROJECTION_MONTHS, deliveryMonth + 24);
   const trialOperationMonths = project.trialOperationMonths ?? 3;
   const hasMall = rows.some(row => /MALL/i.test(row.name));
+  const hasPhase2 = rows.some(row => row.name.includes("二期"));
   return <section className="space-y-4" id="project-settings">
     <div className="card overflow-hidden"><div className="flex items-center gap-3 border-b border-slate-200 px-5 py-4"><span className="rounded-xl bg-teal-50 p-2 text-teal-700"><Settings2 size={20}/></span><div><h2 className="font-semibold text-slate-900">项目基础设置</h2><p className="mt-1 text-xs text-slate-500">统一管理税费、交付节点、销售回款及推演时间</p></div></div>
       <div className="grid gap-5 p-5 md:grid-cols-2 xl:grid-cols-5">{rateField("增值税税率","vatRate")}{rateField("管理费率","managementRate")}{rateField("销售费率","salesRate")}
@@ -35,6 +38,8 @@ export function ProjectSettings({ project, rows, landModel, updateProject }: {
         {landModel&&<label><span className="label">土地总价（万元）</span><input aria-label="土地总价" className="field h-11" type="number" min="0" value={project.landTotalPrice ?? 0} onChange={e=>updateProject({landTotalPrice:Number(e.target.value)})}/></label>}
         {landModel&&<label><span className="label">土地面积（㎡）</span><input aria-label="土地面积" className="field h-11" type="number" min="0" value={project.landArea ?? 0} onChange={e=>updateProject({landArea:Number(e.target.value)})}/></label>}
         <label><span className="label">交付月</span><input aria-label="项目交付月" className="field h-11" type="number" min="1" max={PROJECTION_MONTHS} value={deliveryMonth} onChange={e=>updateProject({deliveryMonth:Math.max(1,Math.min(PROJECTION_MONTHS,Number(e.target.value)))})}/></label>
+        {hasPhase2&&<label><span className="label">二期开始月</span><input aria-label="二期开始月" className="field h-11" type="number" min="1" max={PROJECTION_MONTHS} value={phase2StartMonth} onChange={e=>updateProject({phase2StartMonth:Math.max(1,Math.min(PROJECTION_MONTHS,Number(e.target.value)))})}/></label>}
+        {hasPhase2&&<label><span className="label">二期交付月</span><input aria-label="二期交付月" className="field h-11" type="number" min="1" max={PROJECTION_MONTHS} value={phase2DeliveryMonth} onChange={e=>updateProject({phase2DeliveryMonth:Math.max(1,Math.min(PROJECTION_MONTHS,Number(e.target.value)))})}/></label>}
         <label><span className="label">试营业（月）</span><input aria-label="试营业月数" className="field h-11" type="number" min="0" max="120" value={trialOperationMonths} onChange={e=>updateProject({trialOperationMonths:Math.max(0,Math.min(120,Number(e.target.value)))})}/></label>
         {rateField("年经营成本占比","annualOperatingCostRate")}
         {rateField("自持折现率","holdingDiscountRate")}

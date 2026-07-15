@@ -10,6 +10,20 @@ export function isBasementOrParking(row: Pick<AssetRow, "name">): boolean {
   return /地库|地下(?:车库|室)?|车位|停车/i.test(row.name);
 }
 
+export function isPhase2Asset(row: Pick<AssetRow, "name">): boolean {
+  return row.name.includes("二期");
+}
+
+function rowStartMonth(row: Pick<AssetRow, "name">, project: Pick<ProjectInfo, "phase2StartMonth">): number {
+  return isPhase2Asset(row) ? Math.max(1, Math.min(PROJECTION_MONTHS, Math.round(project.phase2StartMonth || 25))) : 1;
+}
+
+function rowDeliveryMonth(row: Pick<AssetRow, "name">, project: Pick<ProjectInfo, "deliveryMonth"|"phase2DeliveryMonth">): number {
+  const fallback = isPhase2Asset(row) ? 48 : 24;
+  const value = isPhase2Asset(row) ? project.phase2DeliveryMonth : project.deliveryMonth;
+  return Math.max(1, Math.min(PROJECTION_MONTHS, Math.round(value || fallback)));
+}
+
 export function normalizeAssetKind(row: Pick<AssetRow, "kind"|"name">): AssetKind {
   const kind = String(row.kind);
   if (["销售","给政府","自持酒店","自持商业","其他自持"].includes(kind)) return kind as AssetKind;
@@ -56,7 +70,6 @@ export function irr(cashflows: number[]): number | null {
 
 export function calculateRows(rows: AssetRow[], project: ProjectInfo, _allocations: AllocationRule[]): CalculatedRow[] {
   // 兼容旧方案：首次计算时用历史销售面积反推得房率；此后销售面积始终由公式生成。
-  const projectDeliveryMonth = Math.max(1, Math.min(PROJECTION_MONTHS, Math.round(project.deliveryMonth || 24)));
   const normalizedRows = rows.map(row => {
     const kind = normalizeAssetKind(row);
     const efficiencyRate = row.efficiencyRate ?? (row.buildingArea ? row.saleArea / row.buildingArea : 0);
@@ -64,7 +77,7 @@ export function calculateRows(rows: AssetRow[], project: ProjectInfo, _allocatio
     const governmentArea = kind === "给政府" ? round(row.buildingArea) : 0;
     const unitCount = row.unitCount;
     const normalized = { ...row, kind, efficiencyRate, saleArea, governmentArea, unitCount };
-    const collection = kind === "销售" ? { ...defaultCollectionLogic(normalized, project), deliveryMonth: projectDeliveryMonth } : row.collection;
+    const collection = kind === "销售" ? defaultCollectionLogic(normalized, project) : row.collection;
     return { ...normalized, collection };
   });
   const fullPaymentRate = clampRate(project.fullPaymentRate);
@@ -174,7 +187,7 @@ export function calculateProject(rows: AssetRow[], project: ProjectInfo, allocat
   const baseSummary = calculateSummary(baseRows, project);
   const months = PROJECTION_MONTHS;
   const collectionSchedule = calculateCollectionSchedule(baseRows, months, project);
-  const cashFlow = calculateCashFlowProjection(baseSummary, months, collectionSchedule, project.deliveryMonth || 24, project.trialOperationMonths ?? 3);
+  const cashFlow = calculateCashFlowProjection(baseSummary, months, collectionSchedule, project.deliveryMonth || 24, project.trialOperationMonths ?? 3, baseRows, project);
   const monthlyRate = Math.max(0, project.shareholderInterestRate ?? .08) / 12;
   const shareholderInterestTotal = round(cashFlow.reduce((total, point) => total + Math.max(0, -point.cumulativeNetCashFlow) * monthlyRate, 0));
   const interestBase = baseRows.reduce((total, row) => total + row.totalConstructionCost, 0);
@@ -236,17 +249,19 @@ export interface CollectionSchedule {
   rows: RowCollectionProjection[];
 }
 
-type CollectionProjectSettings = Pick<ProjectInfo, "collectionDownPaymentRate" | "collectionMonthlyRate" | "collectionPreDeliveryPaymentRate" | "collectionTailInstallmentMonths" | "fullPaymentRate" | "fullPaymentDiscountRate">;
+type CollectionProjectSettings = Pick<ProjectInfo, "collectionDownPaymentRate" | "collectionMonthlyRate" | "collectionPreDeliveryPaymentRate" | "collectionTailInstallmentMonths" | "fullPaymentRate" | "fullPaymentDiscountRate" | "deliveryMonth" | "phase2StartMonth" | "phase2DeliveryMonth">;
 
 export function defaultCollectionLogic(row: AssetRow, project: CollectionProjectSettings) {
   const downPaymentRate = project.collectionDownPaymentRate ?? .3;
   const monthlyCollectionRate = project.collectionMonthlyRate ?? .05;
   const tailInstallmentMonths = project.collectionTailInstallmentMonths ?? 3;
+  const firstSaleMonth = isPhase2Asset(row) ? rowStartMonth(row, project) : row.collection?.firstSaleMonth ?? (row.name.includes("商业") ? 6 : 1);
+  const deliveryMonth = rowDeliveryMonth(row, project);
   if (normalizeAssetKind(row) !== "销售") return { firstSaleMonth: 0, deliveryMonth: 0, totalUnits: 0, monthlyAbsorptionUnits: 0, downPaymentRate: 0, monthlyCollectionRate: 0, tailInstallmentMonths: 0 };
-  if (row.collection) return { ...row.collection, totalUnits: row.unitCount ?? 0, downPaymentRate, monthlyCollectionRate, tailInstallmentMonths };
+  if (row.collection) return { ...row.collection, firstSaleMonth, deliveryMonth, totalUnits: row.unitCount ?? 0, downPaymentRate, monthlyCollectionRate, tailInstallmentMonths };
   if (!row.saleArea) return { firstSaleMonth: 0, deliveryMonth: 0, totalUnits: 0, monthlyAbsorptionUnits: 0, downPaymentRate: 0, monthlyCollectionRate: 0, tailInstallmentMonths: 0 };
   const totalUnits = row.unitCount ?? 0;
-  return { firstSaleMonth: row.name.includes("商业") ? 6 : 1, deliveryMonth: 24, totalUnits, monthlyAbsorptionUnits: Math.max(1, Math.ceil(totalUnits / 18)), downPaymentRate, monthlyCollectionRate, tailInstallmentMonths };
+  return { firstSaleMonth, deliveryMonth, totalUnits, monthlyAbsorptionUnits: Math.max(1, Math.ceil(totalUnits / 18)), downPaymentRate, monthlyCollectionRate, tailInstallmentMonths };
 }
 
 export function calculateCollectionSchedule(rows: CalculatedRow[], months: number, project: CollectionProjectSettings): CollectionSchedule {
@@ -333,7 +348,7 @@ export function calculateSimulationSummary(base: ProjectSummary, rates: Simulati
  * 月度推演模型：销售与回款采用业态配置；建安支出按建设期分布。
  * 自持经营净现金流从交付并完成试营业后的下一个月开始进入项目现金流。
  */
-export function calculateCashFlowProjection(summary: ProjectSummary, months = PROJECTION_MONTHS, collectionSchedule?: CollectionSchedule, deliveryMonth = months, trialOperationMonths = 0): CashFlowPoint[] {
+export function calculateCashFlowProjection(summary: ProjectSummary, months = PROJECTION_MONTHS, collectionSchedule?: CollectionSchedule, deliveryMonth = months, trialOperationMonths = 0, rows?: CalculatedRow[], project?: ProjectInfo): CashFlowPoint[] {
   const bell = (month: number, start: number, end: number, center: number, spread: number) =>
     month < start || month > end ? 0 : Math.exp(-Math.pow(month - center, 2) / (2 * spread * spread));
   const normalize = (weights: number[]) => {
@@ -347,7 +362,10 @@ export function calculateCashFlowProjection(summary: ProjectSummary, months = PR
     const lagged = month > 2 ? salesWeights[i - 2] * 0.8 : 0;
     return current + lagged;
   }));
-  const constructionEndMonth = Math.max(1, Math.min(months, Math.round(deliveryMonth)));
+  const phaseRows = rows?.length && project ? rows : [];
+  const constructionEndMonth = phaseRows.length
+    ? Math.max(...phaseRows.map(row => rowDeliveryMonth(row, project!)))
+    : Math.max(1, Math.min(months, Math.round(deliveryMonth)));
   const effectiveSalesFeeRate = summary.revenue ? summary.salesFee / summary.revenue : 0;
   const effectiveVatRate = summary.revenue ? summary.vat / summary.revenue : 0;
   // 股东计息是利润测算项，不作为实际现金支出进入资金动态曲线。
@@ -365,14 +383,34 @@ export function calculateCashFlowProjection(summary: ProjectSummary, months = PR
   const openingCostEndMonth = Math.min(months, openingCostStartMonth + requestedOpeningCostMonths - 1);
   const openingCostMonths = Math.max(1, openingCostEndMonth - openingCostStartMonth + 1);
   const openingCostMonthly = round(summary.openingCost / openingCostMonths);
+  const amountInRange = (amount: number, month: number, start: number, end: number) => {
+    if (amount <= 0 || month < start || month > end) return 0;
+    const duration = Math.max(1, end - start + 1);
+    const monthly = round(amount / duration);
+    return month === end ? round(amount - monthly * (duration - 1)) : monthly;
+  };
   let cumulativeSales = 0, cumulativeCollection = 0, cumulativeOutflow = 0;
   return Array.from({ length: months }, (_, i) => {
+    const month = i + 1;
     const monthlySales = round(collectionSchedule?.monthlySales[i] ?? summary.revenue * salesWeights[i]);
     const monthlySalesCollection = round(collectionSchedule?.monthlyCollection[i] ?? summary.revenue * collectionWeights[i]);
-    const monthlyOperatingCashFlow = i + 1 >= operationStartMonth ? round(monthlyHoldingCashFlow) : 0;
+    const monthlyOperatingCashFlow = phaseRows.length
+      ? round(phaseRows.reduce((total, row) => {
+        if (!summary.includeHoldingReturns || row.annualNetCashFlow <= 0) return total;
+        const start = rowDeliveryMonth(row, project!) + Math.max(0, Math.round(trialOperationMonths)) + 1;
+        return month >= start ? total + row.annualNetCashFlow / 12 : total;
+      }, 0))
+      : i + 1 >= operationStartMonth ? round(monthlyHoldingCashFlow) : 0;
     const monthlyCollection = round(monthlySalesCollection + monthlyOperatingCashFlow);
-    const month = i + 1;
-    const constructionOutflow = month <= constructionEndMonth
+    const constructionOutflow = phaseRows.length
+      ? round(phaseRows.reduce((total, row) => {
+        const start = rowStartMonth(row, project!);
+        const end = rowDeliveryMonth(row, project!);
+        const preDeliveryConstructionCost = round(row.totalConstructionCost * .88);
+        const postDeliveryConstructionCost = round(row.totalConstructionCost - preDeliveryConstructionCost);
+        return total + amountInRange(preDeliveryConstructionCost, month, start, end) + amountInRange(postDeliveryConstructionCost, month, end + 1, Math.min(months, end + 6));
+      }, 0))
+      : month <= constructionEndMonth
       ? month === constructionEndMonth
         ? round(preDeliveryConstructionCost - preDeliveryMonthlyCost * (constructionPhaseMonths - 1))
         : preDeliveryMonthlyCost
@@ -381,12 +419,22 @@ export function calculateCashFlowProjection(summary: ProjectSummary, months = PR
           ? round(postDeliveryConstructionCost - postDeliveryMonthlyCost * 5)
           : postDeliveryMonthlyCost
         : 0;
-    const openingCostOutflow = month >= openingCostStartMonth && month <= openingCostEndMonth
+    const openingCostOutflow = phaseRows.length
+      ? round(phaseRows.reduce((total, row) => {
+        const end = rowDeliveryMonth(row, project!);
+        const requestedMonths = Math.max(1, Math.round(trialOperationMonths));
+        const start = Math.min(months, end + (trialOperationMonths > 0 ? 1 : 0));
+        const finish = Math.min(months, start + requestedMonths - 1);
+        return total + amountInRange(row.openingCost, month, start, finish);
+      }, 0))
+      : month >= openingCostStartMonth && month <= openingCostEndMonth
       ? month === openingCostEndMonth
         ? round(summary.openingCost - openingCostMonthly * (openingCostMonths - 1))
         : openingCostMonthly
       : 0;
-    const managementOutflow = i < managementMonths ? summary.managementFee / managementMonths : 0;
+    const managementOutflow = phaseRows.length
+      ? round(phaseRows.reduce((total, row) => total + amountInRange(row.managementFee, month, rowStartMonth(row, project!), rowDeliveryMonth(row, project!)), 0))
+      : i < managementMonths ? summary.managementFee / managementMonths : 0;
     const salesOutflow = monthlySales * effectiveSalesFeeRate;
     const vatOutflow = monthlySalesCollection * effectiveVatRate;
     const landOutflow = i === 0 ? summary.landCost : 0;

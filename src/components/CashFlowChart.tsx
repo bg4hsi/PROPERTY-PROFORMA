@@ -1,7 +1,7 @@
 "use client";
 import { useMemo, useState } from "react";
 import { CashFlowPoint, CollectionSchedule, calculateCashFlowProjection, calculateSimulationSummary, PROJECTION_MONTHS } from "@/lib/calculationEngine";
-import { ProjectInfo, ProjectSummary } from "@/types";
+import { CalculatedRow, ProjectInfo, ProjectSummary } from "@/types";
 
 const money = (value: number) => new Intl.NumberFormat("zh-CN", { maximumFractionDigits: 0 }).format(value || 0);
 const colors = {
@@ -9,11 +9,11 @@ const colors = {
   sales: "#2563eb", collection: "#059669", outflow: "#d97706", net: "#7c3aed"
 };
 
-export function CashFlowChart({ summary, project, collectionSchedule, cutoffMonth }: { summary: ProjectSummary; project: ProjectInfo; collectionSchedule: CollectionSchedule; cutoffMonth: number }) {
+export function CashFlowChart({ summary, rows, project, collectionSchedule, cutoffMonth }: { summary: ProjectSummary; rows: CalculatedRow[]; project: ProjectInfo; collectionSchedule: CollectionSchedule; cutoffMonth: number }) {
   const months = PROJECTION_MONTHS;
   const [hoveredMonth, setHoveredMonth] = useState<number|null>(null);
   const simulation = useMemo(() => calculateSimulationSummary(summary, { managementRate: project.managementRate, salesRate: project.salesRate, vatRate: project.vatRate }), [summary, project.managementRate, project.salesRate, project.vatRate]);
-  const data = useMemo(() => calculateCashFlowProjection(simulation.summary, months, collectionSchedule, project.deliveryMonth || 24, project.trialOperationMonths ?? 3), [simulation.summary, collectionSchedule, project.deliveryMonth, project.trialOperationMonths]);
+  const data = useMemo(() => calculateCashFlowProjection(simulation.summary, months, collectionSchedule, project.deliveryMonth || 24, project.trialOperationMonths ?? 3, rows, project), [simulation.summary, collectionSchedule, project, rows]);
   const point = data[Math.max(0, cutoffMonth - 1)];
 
   const width = 1280, height = 560, left = 78, right = 88, top = 34, bottom = 112;

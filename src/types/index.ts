@@ -29,6 +29,10 @@ export interface ProjectInfo {
   /** 客户选择全款支付时的总价优惠比例。 */
   fullPaymentDiscountRate?: number;
   deliveryMonth: number;
+  /** 名称包含“二期”的业态，按二期开始月作为销售/建设开始节点。 */
+  phase2StartMonth?: number;
+  /** 名称包含“二期”的业态，按二期交付月作为交付/尾款/开业节点。 */
+  phase2DeliveryMonth?: number;
   trialOperationMonths: number;
   /** 旧方案兼容字段，新方案使用四星/五星价格。 */
   hotelAverageDailyRate?: number;

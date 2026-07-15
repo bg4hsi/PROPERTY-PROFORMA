@@ -30,6 +30,8 @@ const createBlankScenario = (): Scenario => ({
     fullPaymentRate: 0,
     fullPaymentDiscountRate: 0,
     deliveryMonth: 24,
+    phase2StartMonth: 25,
+    phase2DeliveryMonth: 48,
     trialOperationMonths: 3,
     hotelAverageDailyRate: 800,
     fourStarHotelAverageDailyRate: 600,
@@ -104,9 +106,11 @@ export const useProjectStore = create<Store>()(persist((set, get) => ({
   scenarios: [sampleScenario], activeId: sampleScenario.id, undoStack: [],
   active: () => get().scenarios.find(s => s.id === get().activeId) || get().scenarios[0],
   updateProject: patch => set(state => updateActive(state, s => {
-    if (patch.deliveryMonth === undefined) return { ...s, project: { ...s.project, ...patch } };
-    const deliveryMonth = Math.max(1, Math.min(PROJECTION_MONTHS, Math.round(patch.deliveryMonth)));
-    return { ...s, project: { ...s.project, ...patch, deliveryMonth } };
+    const nextProject = { ...s.project, ...patch };
+    if (patch.deliveryMonth !== undefined) nextProject.deliveryMonth = Math.max(1, Math.min(PROJECTION_MONTHS, Math.round(patch.deliveryMonth)));
+    if (patch.phase2StartMonth !== undefined) nextProject.phase2StartMonth = Math.max(1, Math.min(PROJECTION_MONTHS, Math.round(patch.phase2StartMonth)));
+    if (patch.phase2DeliveryMonth !== undefined) nextProject.phase2DeliveryMonth = Math.max(1, Math.min(PROJECTION_MONTHS, Math.round(patch.phase2DeliveryMonth)));
+    return { ...s, project: nextProject };
   })),
   updateRow: (id, patch) => set(state => updateActive(state, s => ({ ...s, rows: s.rows.map(row => {
     if (row.id !== id) return row;
