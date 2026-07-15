@@ -199,6 +199,13 @@ export interface CashFlowPoint {
   monthlySales: number;
   monthlyCollection: number;
   monthlyOperatingCashFlow: number;
+  monthlyLandOutflow: number;
+  monthlyConstructionOutflow: number;
+  monthlyOpeningCostOutflow: number;
+  monthlyManagementOutflow: number;
+  monthlySalesFeeOutflow: number;
+  monthlyVatOutflow: number;
+  monthlyOtherOutflow: number;
   monthlyOutflow: number;
   cumulativeSales: number;
   cumulativeCollection: number;
@@ -382,12 +389,21 @@ export function calculateCashFlowProjection(summary: ProjectSummary, months = PR
     const salesOutflow = monthlySales * effectiveSalesFeeRate;
     const vatOutflow = monthlySales * effectiveVatRate;
     const landOutflow = i === 0 ? summary.landCost : 0;
-    const monthlyOutflow = round(landOutflow + constructionOutflow + openingCostOutflow + managementOutflow + salesOutflow + vatOutflow + (i === months - 1 ? residualCost : 0));
+    const otherOutflow = i === months - 1 ? residualCost : 0;
+    const monthlyOutflow = round(landOutflow + constructionOutflow + openingCostOutflow + managementOutflow + salesOutflow + vatOutflow + otherOutflow);
     cumulativeSales += monthlySales;
     cumulativeCollection += monthlyCollection;
     cumulativeOutflow += monthlyOutflow;
     return {
-      month: i + 1, monthlySales, monthlyCollection, monthlyOperatingCashFlow, monthlyOutflow,
+      month: i + 1, monthlySales, monthlyCollection, monthlyOperatingCashFlow,
+      monthlyLandOutflow: round(landOutflow),
+      monthlyConstructionOutflow: round(constructionOutflow),
+      monthlyOpeningCostOutflow: round(openingCostOutflow),
+      monthlyManagementOutflow: round(managementOutflow),
+      monthlySalesFeeOutflow: round(salesOutflow),
+      monthlyVatOutflow: round(vatOutflow),
+      monthlyOtherOutflow: round(otherOutflow),
+      monthlyOutflow,
       cumulativeSales: round(cumulativeSales), cumulativeCollection: round(cumulativeCollection),
       cumulativeOutflow: round(cumulativeOutflow), cumulativeNetCashFlow: round(cumulativeCollection - cumulativeOutflow)
     };
