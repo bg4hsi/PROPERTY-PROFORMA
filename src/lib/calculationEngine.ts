@@ -24,6 +24,22 @@ export function normalizeAssetKind(row: Pick<AssetRow, "kind"|"name">): AssetKin
   return "其他自持";
 }
 
+function openingCostRateFor(row: Pick<AssetRow, "name">, project: ProjectInfo): number {
+  const name = row.name.replace(/\s+/g, "");
+  const fourStarRate = Math.max(0, project.fourStarHotelOpeningCost ?? 0);
+  const fiveStarRate = Math.max(0, project.fiveStarHotelOpeningCost ?? 0);
+  const mallRate = Math.max(0, project.mallOpeningCost ?? 0);
+  const isFiveStar = /五星|5星|5星级|5星級|five-?star/i.test(name) || /会展|会议|展览|会务/.test(name);
+  const isFourStar = /四星|4星|4星级|4星級|four-?star/i.test(name);
+  const isMall = /MALL|购物中心|商场/i.test(name);
+  const isHotel = /酒店/.test(name);
+  if (isFiveStar) return fiveStarRate;
+  if (isFourStar) return fourStarRate || fiveStarRate;
+  if (isHotel) return fourStarRate || fiveStarRate;
+  if (isMall) return mallRate;
+  return 0;
+}
+
 export function npv(rate: number, cashflows: number[]): number {
   return cashflows.reduce((sum, cashflow, year) => sum + cashflow / Math.pow(1 + rate, year), 0);
 }
@@ -73,15 +89,7 @@ export function calculateRows(rows: AssetRow[], project: ProjectInfo, _allocatio
     // 建筑面积已包含政府面积时，基础成本中扣除政府面积，避免重复计算。
     const saleAndHoldCost = round(Math.max(0, row.buildingArea - row.governmentArea) * row.unitCost / 10000);
     const totalConstructionCost = round(saleAndHoldCost + governmentConstructionCost + secondaryAllocation);
-    const isHotelAsset = row.kind === "自持酒店" || /酒店/.test(row.name);
-    const isMallAsset = /MALL|购物中心|商场/i.test(row.name);
-    const usesFiveStarOpeningCost = /五星|5\s*星/i.test(row.name) || /会展|会议|展览|会务/.test(row.name);
-    const usesFourStarOpeningCost = /四星|4\s*星/i.test(row.name);
-    const openingCostRate = usesFiveStarOpeningCost
-      ? (project.fiveStarHotelOpeningCost ?? 0)
-      : usesFourStarOpeningCost || isHotelAsset
-        ? (project.fourStarHotelOpeningCost ?? 0)
-        : isMallAsset ? (project.mallOpeningCost ?? 0) : 0;
+    const openingCostRate = openingCostRateFor(row, project);
     const openingCost = round(row.buildingArea * openingCostRate / 10000);
     const isSaleable = row.saleArea > 0;
     const rowLandAllocationBasis = landAllocationBasis.get(row.id) || 0;
