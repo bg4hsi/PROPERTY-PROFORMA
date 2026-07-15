@@ -368,8 +368,9 @@ export function calculateCashFlowProjection(summary: ProjectSummary, months = PR
   let cumulativeSales = 0, cumulativeCollection = 0, cumulativeOutflow = 0;
   return Array.from({ length: months }, (_, i) => {
     const monthlySales = round(collectionSchedule?.monthlySales[i] ?? summary.revenue * salesWeights[i]);
+    const monthlySalesCollection = round(collectionSchedule?.monthlyCollection[i] ?? summary.revenue * collectionWeights[i]);
     const monthlyOperatingCashFlow = i + 1 >= operationStartMonth ? round(monthlyHoldingCashFlow) : 0;
-    const monthlyCollection = round((collectionSchedule?.monthlyCollection[i] ?? summary.revenue * collectionWeights[i]) + monthlyOperatingCashFlow);
+    const monthlyCollection = round(monthlySalesCollection + monthlyOperatingCashFlow);
     const month = i + 1;
     const constructionOutflow = month <= constructionEndMonth
       ? month === constructionEndMonth
@@ -387,7 +388,7 @@ export function calculateCashFlowProjection(summary: ProjectSummary, months = PR
       : 0;
     const managementOutflow = i < managementMonths ? summary.managementFee / managementMonths : 0;
     const salesOutflow = monthlySales * effectiveSalesFeeRate;
-    const vatOutflow = monthlySales * effectiveVatRate;
+    const vatOutflow = monthlySalesCollection * effectiveVatRate;
     const landOutflow = i === 0 ? summary.landCost : 0;
     const otherOutflow = i === months - 1 ? residualCost : 0;
     const monthlyOutflow = round(landOutflow + constructionOutflow + openingCostOutflow + managementOutflow + salesOutflow + vatOutflow + otherOutflow);
