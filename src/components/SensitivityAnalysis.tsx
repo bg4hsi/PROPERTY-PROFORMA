@@ -9,7 +9,7 @@ const number = (value: number, digits = 0) => new Intl.NumberFormat("zh-CN", { m
 
 export function SensitivityAnalysis({ rows, project }: { rows: AssetRow[]; project: ProjectInfo }) {
   const analysis = useMemo(() => {
-    const saleArea = rows.reduce((total, row) => total + (normalizeAssetKind(row) === "销售" ? row.buildingArea * (row.efficiencyRate ?? (row.buildingArea ? row.saleArea / row.buildingArea : 0)) : 0), 0);
+    const saleArea = rows.reduce((total, row) => total + (normalizeAssetKind(row) === "销售" ? row.saleArea : 0), 0);
     const evaluate = (factor: number) => {
       const adjustedRows = rows.map(row => normalizeAssetKind(row) === "销售" ? { ...row, salePrice: row.salePrice * factor } : row);
       const summary = calculateProject(adjustedRows, { ...project, includeHoldingReturns: false }, []).summary;

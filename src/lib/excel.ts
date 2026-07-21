@@ -218,8 +218,8 @@ export async function exportExcel(scenario: Scenario) {
   })));
   const inputSheet = XLSX.utils.json_to_sheet(calculatedRows.map(row => {
     const kind = normalizeAssetKind(row);
-    const efficiencyRate = row.efficiencyRate ?? (row.buildingArea ? row.saleArea / row.buildingArea : 0);
-    const saleArea = kind === "销售" ? row.buildingArea * efficiencyRate : 0;
+    const saleArea = kind === "销售" ? row.saleArea : 0;
+    const efficiencyRate = kind === "销售" && row.buildingArea ? saleArea / row.buildingArea : (row.efficiencyRate ?? 0);
     const normalizedRow = { ...row, kind, efficiencyRate, saleArea };
     const logic = defaultCollectionLogic(normalizedRow, scenario.project);
     const isOtherHolding = kind === "其他自持";

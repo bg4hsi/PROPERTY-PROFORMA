@@ -84,8 +84,17 @@ const normalizeScenario = (scenario: Scenario): Scenario => ({
   project: normalizeProject(scenario.project),
   rows: scenario.rows.map(row => {
     const project = normalizeProject(scenario.project);
+    const kind = normalizeAssetKind(row);
+    // 旧缓存曾由得房率实时重算销售面积。加载时先把当时页面实际展示的面积固化，
+    // 之后销售面积将作为优先的手动数据保存。
+    const saleArea = kind === "销售" && row.buildingArea > 0 && (row.efficiencyRate ?? 0) > 0
+      ? row.buildingArea * (row.efficiencyRate ?? 0)
+      : row.saleArea;
     return {
       ...row,
+      kind,
+      saleArea,
+      efficiencyRate: kind === "销售" && row.buildingArea > 0 ? saleArea / row.buildingArea : row.efficiencyRate,
       manualManagementFee: null,
       manualSalesFee: null,
       collection: row.collection ? {

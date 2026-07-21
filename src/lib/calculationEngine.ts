@@ -69,11 +69,14 @@ export function irr(cashflows: number[]): number | null {
 }
 
 export function calculateRows(rows: AssetRow[], project: ProjectInfo, _allocations: AllocationRule[]): CalculatedRow[] {
-  // 兼容旧方案：首次计算时用历史销售面积反推得房率；此后销售面积始终由公式生成。
+  // 销售面积是可直接录入的基础数据，得房率仅作为由面积反算出的结果。
+  // 只有在界面直接编辑得房率时，界面才会同步写入新的销售面积。
   const normalizedRows = rows.map(row => {
     const kind = normalizeAssetKind(row);
-    const efficiencyRate = row.efficiencyRate ?? (row.buildingArea ? row.saleArea / row.buildingArea : 0);
-    const saleArea = kind === "销售" ? round(row.buildingArea * efficiencyRate) : 0;
+    const saleArea = kind === "销售" ? round(Math.max(0, row.saleArea)) : 0;
+    const efficiencyRate = kind === "销售"
+      ? (row.buildingArea > 0 ? round(saleArea / row.buildingArea) : 0)
+      : clampRate(row.efficiencyRate);
     const governmentArea = kind === "给政府" ? round(row.buildingArea) : 0;
     const unitCount = row.unitCount;
     const normalized = { ...row, kind, efficiencyRate, saleArea, governmentArea, unitCount };
