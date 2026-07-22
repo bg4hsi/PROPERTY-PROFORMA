@@ -154,6 +154,10 @@ export interface ProjectSummary {
   roiExcludingHoldingReturns: number;
   roiIncludingHoldingReturns: number;
   governmentArea: number;
+  /** 给政府业态按建筑面积 × 得房率折算的套内面积。 */
+  governmentInternalArea: number;
+  /** 全部业态按建筑面积 × 得房率折算的套内面积。 */
+  totalInternalArea: number;
   governmentRatio: number;
   governmentCost: number;
 }

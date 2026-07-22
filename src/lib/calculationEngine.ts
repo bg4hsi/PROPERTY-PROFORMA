@@ -175,12 +175,15 @@ export function calculateSummary(rows: CalculatedRow[], project: ProjectInfo): P
   const netProfitIncludingHoldingReturns = round(revenue + holdingReturns - totalCost);
   const netProfit = project.includeHoldingReturns ? netProfitIncludingHoldingReturns : netProfitExcludingHoldingReturns;
   const governmentArea = round(sum("governmentArea"));
+  const governmentInternalArea = round(rows.reduce((total, row) => total + (row.kind === "给政府" ? row.buildingArea * (row.efficiencyRate ?? 0) : 0), 0));
+  // 套内面积不以销售面积是否为 0 判断；自持、给政府等非销售业态同样按得房率折算。
+  const totalInternalArea = round(rows.reduce((total, row) => total + row.buildingArea * (row.efficiencyRate ?? 0), 0));
   return { revenue, holdingReturns, holdingAnnualNetCashFlow, includeHoldingReturns: project.includeHoldingReturns,
     totalIncome, totalConstructionCost, openingCost, landCost, managementFeeBase, managementFee, salesFee, vat, shareholderInterest,
     totalCost, netProfit, roi: totalCost ? netProfit / totalCost : 0,
     netProfitExcludingHoldingReturns, netProfitIncludingHoldingReturns,
     roiExcludingHoldingReturns: totalCost ? netProfitExcludingHoldingReturns / totalCost : 0,
-    roiIncludingHoldingReturns: totalCost ? netProfitIncludingHoldingReturns / totalCost : 0, governmentArea,
+    roiIncludingHoldingReturns: totalCost ? netProfitIncludingHoldingReturns / totalCost : 0, governmentArea, governmentInternalArea, totalInternalArea,
     governmentRatio: project.totalBuildingArea ? governmentArea / project.totalBuildingArea : 0,
     governmentCost: round(rows.reduce((total,row)=>total+(row.kind==="给政府"?row.governmentConstructionCost+row.openingCost:0),0)) };
 }
